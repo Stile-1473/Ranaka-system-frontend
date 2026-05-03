@@ -416,7 +416,7 @@ function CreateRequestPage() {
           <p className="mt-1 text-sm text-slate-500">
             {isEditMode
               ? "Update the request and save it when you are ready."
-              : "Capture the request details and submit when the form is complete."}
+              : "Add what is needed, why it is needed, and the estimated cost. Plain language is enough."}
           </p>
         </div>
         <Button asChild variant="secondary">
@@ -448,6 +448,10 @@ function CreateRequestPage() {
                 <p className="mt-1 truncate text-sm text-slate-500">
                   {watchedTitle?.trim() || "New request"}
                 </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Example: "Laptop replacement for finance officer" or
+                  "Office chairs for reception".
+                </p>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                   <span>{selectedDepartment?.name || "No department selected"}</span>
                   <span>{formatPriority(watchedPriority)}</span>
@@ -477,6 +481,7 @@ function CreateRequestPage() {
                 <InputField
                   label="Request title"
                   placeholder="Office chairs for finance team"
+                  description="Use a short name that reviewers can understand quickly."
                   error={errors.title?.message}
                   {...register("title")}
                   className="md:col-span-2"
@@ -484,6 +489,7 @@ function CreateRequestPage() {
 
                 <SelectField
                   label="Department"
+                  description="Choose the team that owns this request."
                   error={errors.departmentId?.message}
                   disabled={activeDepartmentsStatus === "loading"}
                   {...register("departmentId")}
@@ -502,6 +508,7 @@ function CreateRequestPage() {
 
                 <SelectField
                   label="Priority"
+                  description="Use High or Critical only when delay will affect work."
                   error={errors.priority?.message}
                   {...register("priority")}
                 >
@@ -517,6 +524,7 @@ function CreateRequestPage() {
                   label="Required by date"
                   type="date"
                   min={minimumRequiredDate}
+                  description="Pick the date the item is really needed."
                   error={errors.requiredByDate?.message}
                   {...register("requiredByDate")}
                 />
@@ -524,6 +532,7 @@ function CreateRequestPage() {
                 <TextareaField
                   label="Request description"
                   placeholder="Describe what needs to be procured."
+                  description="Say what you need in simple words. Example: 5 office chairs for the reception area."
                   error={errors.description?.message}
                   rows={4}
                   className="md:col-span-2"
@@ -533,6 +542,7 @@ function CreateRequestPage() {
                 <TextareaField
                   label="Business justification"
                   placeholder="Explain why this request is needed."
+                  description="Explain the reason. Example: Current chairs are damaged and visitors need safe seating."
                   error={errors.justification?.message}
                   rows={4}
                   className="md:col-span-2"
@@ -560,6 +570,10 @@ function CreateRequestPage() {
                     `${completedLineItems}/${fields.length} ready`
                   )}
                 </div>
+                <p className="mt-1 text-sm text-slate-500">
+                  Add each item separately so quantities and costs are easy to
+                  review.
+                </p>
               </div>
               <Button
                 type="button"
@@ -633,6 +647,7 @@ function CreateRequestPage() {
                         <InputField
                           label="Item description"
                           placeholder="Office chair"
+                          description="Example: Ergonomic office chair, HP laptop, printer toner."
                           error={errors.lineItems?.[index]?.itemDescription?.message}
                           className="md:col-span-2"
                           {...register(`lineItems.${index}.itemDescription`)}
@@ -643,6 +658,7 @@ function CreateRequestPage() {
                           type="number"
                           min="1"
                           step="1"
+                          description="How many are needed?"
                           error={errors.lineItems?.[index]?.quantity?.message}
                           {...register(`lineItems.${index}.quantity`)}
                         />
@@ -652,6 +668,7 @@ function CreateRequestPage() {
                           type="number"
                           min="0"
                           step="0.01"
+                          description="Estimated cost for one item."
                           error={errors.lineItems?.[index]?.unitCost?.message}
                           {...register(`lineItems.${index}.unitCost`)}
                         />
@@ -659,6 +676,7 @@ function CreateRequestPage() {
                         <InputField
                           label="Unit"
                           placeholder="pieces"
+                          description="Example: pieces, boxes, months, litres."
                           error={errors.lineItems?.[index]?.unit?.message}
                           {...register(`lineItems.${index}.unit`)}
                         />
@@ -675,6 +693,7 @@ function CreateRequestPage() {
                         <TextareaField
                           label="Item notes"
                           placeholder="Optional notes"
+                          description="Optional: add size, model, supplier, or any useful detail."
                           rows={2}
                           error={errors.lineItems?.[index]?.notes?.message}
                           className="md:col-span-2"

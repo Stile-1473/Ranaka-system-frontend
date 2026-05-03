@@ -51,7 +51,7 @@ const requestStatusLabels = {
   APPROVED_BY_GM: "Approved by GM",
   PENDING_CEO_AUTHORIZATION: "Waiting for CEO Authorization",
   AUTHORIZED: "Approved",
-  COMPLETED: "Completed",
+  COMPLETED: "Finished",
   RETURNED_FOR_CORRECTION: "Needs Your Correction",
   REJECTED: "Not Approved",
 };

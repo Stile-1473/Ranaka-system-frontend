@@ -26,6 +26,8 @@ import { exportReport } from "../../services/reportService";
 import {
   formatCurrency,
   formatEnumLabel,
+  formatPriority,
+  formatRequestStatus,
   formatWorkflowStage,
 } from "../../utils/requestHelpers";
 import { formatDate, formatDateTime } from "../../utils/dateFormatters";
@@ -175,7 +177,7 @@ function ReportsPage() {
   const bottleneckChartData = useMemo(
     () =>
       (bottlenecksReport || []).map((row) => ({
-        stage: formatEnumLabel(row.stageName),
+        stage: formatWorkflowStage(row.stageName),
         pending: Number(row.pendingCount ?? 0),
         overdue: Number(row.overdueCount ?? 0),
       })),
@@ -195,7 +197,7 @@ function ReportsPage() {
   const priorityMixData = useMemo(
     () =>
       REQUEST_PRIORITIES.map((priority) => ({
-        name: formatEnumLabel(priority),
+        name: formatPriority(priority),
         value: (overdueRequestsReport || []).filter(
           (request) => request.priority === priority
         ).length,
@@ -331,7 +333,7 @@ function ReportsPage() {
             <option value="">All priorities</option>
             {REQUEST_PRIORITIES.map((priority) => (
               <option key={priority} value={priority}>
-                {formatEnumLabel(priority)}
+                {formatPriority(priority)}
               </option>
             ))}
           </SelectField>
@@ -348,7 +350,7 @@ function ReportsPage() {
             <option value="">All statuses</option>
             {STATUS_OPTIONS.map((status) => (
               <option key={status} value={status}>
-                {formatEnumLabel(status)}
+                {formatRequestStatus(status)}
               </option>
             ))}
           </SelectField>
@@ -705,7 +707,7 @@ function ReportsPage() {
                         {formatWorkflowStage(request.currentStage)}
                       </Badge>
                       <Badge variant="danger">
-                        {formatEnumLabel(request.priority)}
+                        {formatPriority(request.priority)}
                       </Badge>
                     </div>
                     <p className="mt-3 text-sm font-semibold text-slate-900">
