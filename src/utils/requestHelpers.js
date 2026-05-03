@@ -43,22 +43,76 @@ export const formatEnumLabel = (value) =>
     .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
     .join(" ");
 
+const requestStatusLabels = {
+  DRAFT: "Draft",
+  PENDING_ADMIN_RECOMMENDATION: "Waiting for Admin Review",
+  RECOMMENDED: "Recommended",
+  PENDING_GM_APPROVAL: "Waiting for GM Approval",
+  APPROVED_BY_GM: "Approved by GM",
+  PENDING_CEO_AUTHORIZATION: "Waiting for CEO Authorization",
+  AUTHORIZED: "Approved",
+  COMPLETED: "Completed",
+  RETURNED_FOR_CORRECTION: "Needs Your Correction",
+  REJECTED: "Not Approved",
+};
+
+const workflowStageLabels = {
+  DRAFT: "Still with you",
+  ADMIN_RECOMMENDATION: "Admin is reviewing",
+  GM_APPROVAL: "GM is reviewing",
+  CEO_AUTHORIZATION: "CEO is reviewing",
+  COMPLETED: "Finished",
+};
+
+const approvalActionLabels = {
+  RECOMMEND: "Recommended",
+  APPROVE: "Approved",
+  AUTHORIZE: "Authorized",
+  REJECT: "Not approved",
+  RETURN_FOR_CORRECTION: "Sent back for correction",
+};
+
 export const formatRequestStatus = (status, isOverdue = false) => {
   if (isOverdue) {
     return "Overdue";
   }
 
-  return formatEnumLabel(status) || "Unknown";
+  return requestStatusLabels[status] || formatEnumLabel(status) || "Unknown";
 };
 
 export const formatPriority = (priority) =>
   formatEnumLabel(priority) || "Not set";
 
 export const formatWorkflowStage = (stage) =>
-  formatEnumLabel(stage) || "Not assigned";
+  workflowStageLabels[stage] || formatEnumLabel(stage) || "Not assigned";
 
 export const formatApprovalAction = (action) =>
-  formatEnumLabel(action) || "No action";
+  approvalActionLabels[action] || formatEnumLabel(action) || "No action";
+
+export const getRequestNextStep = (request) => {
+  if (!request) return "Open the request to see what to do next.";
+  if (request.isOverdue) return "This request needs attention because it is overdue.";
+
+  switch (request.status) {
+    case "DRAFT":
+      return "Finish the draft and submit it when ready.";
+    case "RETURNED_FOR_CORRECTION":
+      return "Review the feedback, make changes, then resubmit.";
+    case "PENDING_ADMIN_RECOMMENDATION":
+      return "No action needed. Admin is reviewing it.";
+    case "PENDING_GM_APPROVAL":
+      return "No action needed. It is waiting for GM approval.";
+    case "PENDING_CEO_AUTHORIZATION":
+      return "No action needed. It is waiting for final authorization.";
+    case "AUTHORIZED":
+    case "COMPLETED":
+      return "This request is complete.";
+    case "REJECTED":
+      return "This request was not approved. Open it to read the reason.";
+    default:
+      return "Open the request to see the latest details.";
+  }
+};
 
 export const formatCurrency = (value) => {
   if (value === null || value === undefined || value === "") {

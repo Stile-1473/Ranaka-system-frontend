@@ -137,7 +137,7 @@ function RequestDetailsPage() {
       await fetchRequestDetails(requestId);
 
       toast.success("Request submitted", {
-        description: "The request is now in the approval workflow.",
+        description: "It is now waiting for Admin review.",
       });
     } catch {
       toast.error("Could not submit request", {
@@ -151,7 +151,7 @@ function RequestDetailsPage() {
     return (
       <Card>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-10 text-sm text-slate-500">
-          Loading request details...
+            Checking request details...
         </div>
       </Card>
     );
@@ -197,6 +197,13 @@ function RequestDetailsPage() {
               {formatWorkflowStage(requestDetails.currentStage)}
             </span>
           </div>
+          <p className="mt-3 text-sm text-slate-500">
+            {requestDetails.status === "DRAFT"
+              ? "This draft is still with you. Submit it when everything looks right."
+              : requestDetails.status === "RETURNED_FOR_CORRECTION"
+                ? "This request needs changes before it can move forward again."
+                : "You can track this request here while it moves through review."}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Button asChild variant="secondary">
@@ -239,7 +246,7 @@ function RequestDetailsPage() {
           value={formatDateTime(requestDetails.createdAt)}
         />
         <InfoCard
-          label="Workflow"
+          label="Progress"
           value={
             requestDetails.submittedAt
               ? `Submitted ${formatDateTime(requestDetails.submittedAt)}`
@@ -255,7 +262,7 @@ function RequestDetailsPage() {
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <DetailMeta label="Department" value={requestDetails.departmentName} />
               <DetailMeta
-                label="Current Stage"
+                label="Where It Is Now"
                 value={formatWorkflowStage(requestDetails.currentStage)}
               />
             </div>

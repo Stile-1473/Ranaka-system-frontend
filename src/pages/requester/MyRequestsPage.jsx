@@ -7,7 +7,11 @@ import RequestPriorityBadge from "../../components/requests/RequestPriorityBadge
 import RequestStatusBadge from "../../components/requests/RequestStatusBadge";
 import { useRequestQueryStore } from "../../stores/query/requestQueryStore";
 import { formatDate, formatDateTime } from "../../utils/dateFormatters";
-import { formatCurrency } from "../../utils/requestHelpers";
+import {
+  formatCurrency,
+  formatWorkflowStage,
+  getRequestNextStep,
+} from "../../utils/requestHelpers";
 
 const requestMatchesFilter = (request, filter) => {
   if (filter === "all") return true;
@@ -106,9 +110,9 @@ function MyRequestsPage() {
   const filterOptions = [
     { id: "all", label: "All", count: metrics.total },
     { id: "draft", label: "Drafts", count: metrics.draftCount },
-    { id: "in-review", label: "In Review", count: metrics.inReviewCount },
-    { id: "returned", label: "Returned", count: metrics.returnedCount },
-    { id: "completed", label: "Completed", count: metrics.completedCount },
+    { id: "in-review", label: "Waiting", count: metrics.inReviewCount },
+    { id: "returned", label: "Needs Correction", count: metrics.returnedCount },
+    { id: "completed", label: "Finished", count: metrics.completedCount },
     { id: "overdue", label: "Overdue", count: metrics.overdueCount },
   ];
 
@@ -127,8 +131,11 @@ function MyRequestsPage() {
           <div>
             <p className="section-title">My Requests</p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-900">
-              Your request queue
+              Your requests
             </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Drafts need your action. Submitted requests can be tracked here while they move through review.
+            </p>
           </div>
           <Button asChild className="gap-2">
             <Link to="/requests/new">Create Request</Link>
@@ -137,15 +144,15 @@ function MyRequestsPage() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <QueueMetricCard label="Total" value={metrics.total} />
+        <QueueMetricCard label="All Requests" value={metrics.total} />
         <QueueMetricCard label="Drafts" value={metrics.draftCount} tone="brand" />
         <QueueMetricCard
-          label="Returned"
+          label="Needs Correction"
           value={metrics.returnedCount}
           tone="amber"
         />
         <QueueMetricCard
-          label="Completed"
+          label="Finished"
           value={metrics.completedCount}
           tone="slate"
         />
@@ -154,7 +161,7 @@ function MyRequestsPage() {
       {myRequestsStatus === "loading" ? (
         <Card>
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-10 text-sm text-slate-500">
-            Loading your requests...
+            Checking your requests. If the server is waking up, this may take a moment...
           </div>
         </Card>
       ) : null}
@@ -177,8 +184,7 @@ function MyRequestsPage() {
                 No requests yet
               </p>
               <p className="mt-2 text-sm text-slate-500">
-                Start with a draft, then submit it into the Admin to GM to CEO
-                workflow when all required details are ready.
+                Start with a draft. You can submit it for review once the details are ready.
               </p>
             </div>
             <Button asChild>
@@ -218,7 +224,7 @@ function MyRequestsPage() {
                   type="text"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search title, department, status..."
+                  placeholder="Search by title, department, or status..."
                   className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-brand-400 focus:ring-4 focus:ring-brand-100"
                 />
               </label>
@@ -260,7 +266,7 @@ function MyRequestsPage() {
                               <RequestPriorityBadge priority={request.priority} />
                               {request.returnCount ? (
                                 <span className="rounded-lg bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
-                                  Returned {request.returnCount}x
+                                  Sent back for changes
                                 </span>
                               ) : null}
                             </div>
@@ -275,6 +281,9 @@ function MyRequestsPage() {
                               <p className="mt-1 text-sm text-slate-500">
                                 {request.departmentName || "No department assigned"}
                               </p>
+                              <p className="mt-2 text-sm text-slate-600">
+                                {getRequestNextStep(request)}
+                              </p>
                             </div>
 
                       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -286,8 +295,8 @@ function MyRequestsPage() {
                               </span>
                               <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                                 {request.submittedAt
-                                  ? `Submitted ${formatDateTime(request.submittedAt)}`
-                                  : "Draft not submitted"}
+                                  ? formatWorkflowStage(request.currentStage)
+                                  : "Still with you"}
                               </span>
                             </div>
                           </div>

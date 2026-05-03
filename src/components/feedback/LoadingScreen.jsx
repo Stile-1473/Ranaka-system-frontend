@@ -12,7 +12,7 @@ function LoadingScreen({ message = "Preparing your workspace..." }) {
         <div>
           <p className="text-lg font-semibold text-slate-900">{message}</p>
           <p className="mt-2 text-sm text-slate-500">
-            Ranaka is loading your role-aware workspace.
+            If the server was resting, this can take a short moment.
           </p>
         </div>
       </div>

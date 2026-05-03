@@ -16,7 +16,11 @@ import RequestPriorityBadge from "../../components/requests/RequestPriorityBadge
 import RequestStatusBadge from "../../components/requests/RequestStatusBadge";
 import { useDashboardQueryStore } from "../../stores/query/dashboardQueryStore";
 import { useRequestQueryStore } from "../../stores/query/requestQueryStore";
-import { formatCurrency } from "../../utils/requestHelpers";
+import {
+  formatCurrency,
+  formatWorkflowStage,
+  getRequestNextStep,
+} from "../../utils/requestHelpers";
 import { formatDate, formatDateTime } from "../../utils/dateFormatters";
 
 const buildTrendData = (requests) => {
@@ -70,17 +74,23 @@ function RequesterDashboardPage() {
 
   const allRequests = myRequestsPage?.content ?? [];
   const recentRequests = allRequests.slice(0, 5);
+  const attentionRequests = allRequests
+    .filter((request) =>
+      ["RETURNED_FOR_CORRECTION", "DRAFT"].includes(request.status)
+    )
+    .slice(0, 3);
   const trendData = buildTrendData(allRequests);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-900">
-            Requester Dashboard
+          <p className="section-title">Your Workspace</p>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-900">
+            What needs your attention
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            View request activity, track progress, and start a new request.
+            Start, fix, or follow up on procurement requests from one place.
           </p>
         </div>
         <Button asChild>
@@ -88,11 +98,64 @@ function RequesterDashboardPage() {
         </Button>
       </div>
 
+      <Card>
+        {myRequestsStatus === "loading" ? (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-500">
+            Checking your requests. If the server is waking up, this may take a moment...
+          </div>
+        ) : attentionRequests.length === 0 ? (
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">
+                Nothing needs your action right now
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Your submitted requests will keep moving through review. You only need to act when a draft or returned request appears here.
+              </p>
+            </div>
+            <Button asChild variant="secondary" className="shrink-0">
+              <Link to="/requests">View My Requests</Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {attentionRequests.map((request) => (
+              <Link
+                key={request.id}
+                to={`/requests/${request.id}`}
+                className="block rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 transition hover:border-brand-200 hover:bg-white"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <RequestStatusBadge
+                        status={request.status}
+                        isOverdue={request.isOverdue}
+                      />
+                      <RequestPriorityBadge priority={request.priority} />
+                    </div>
+                    <p className="mt-2 truncate text-sm font-semibold text-slate-900">
+                      {request.title}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {getRequestNextStep(request)}
+                    </p>
+                  </div>
+                  <span className="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700">
+                    {request.status === "DRAFT" ? "Continue" : "Fix Request"}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Requests" value={summary?.totalRequests ?? "--"} />
-        <StatCard label="Pending" value={summary?.pendingRequests ?? "--"} tone="amber" />
-        <StatCard label="Returned" value={summary?.returnedRequests ?? "--"} />
-        <StatCard label="Completed" value={summary?.completedRequests ?? "--"} />
+        <StatCard label="All Requests" value={summary?.totalRequests ?? "--"} />
+        <StatCard label="Waiting for Review" value={summary?.pendingRequests ?? "--"} tone="amber" />
+        <StatCard label="Needs Correction" value={summary?.returnedRequests ?? "--"} />
+        <StatCard label="Finished" value={summary?.completedRequests ?? "--"} />
       </div>
 
       <Card>
@@ -170,11 +233,11 @@ function RequesterDashboardPage() {
         <div className="mt-6">
           {myRequestsStatus === "loading" ? (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-500">
-              Loading your recent requests...
+              Checking your recent requests...
             </div>
           ) : recentRequests.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
-              No requests yet. Your first draft will appear here once created.
+              No requests yet. Create your first draft when you are ready.
             </div>
           ) : (
             <div className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
@@ -198,7 +261,7 @@ function RequesterDashboardPage() {
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
                         <span>{request.departmentName || "No department"}</span>
-                        <span>{request.currentStage || "Not yet submitted"}</span>
+                        <span>{formatWorkflowStage(request.currentStage)}</span>
                       </div>
                     </div>
                     <div className="text-sm lg:text-right">

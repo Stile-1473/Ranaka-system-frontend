@@ -6,16 +6,16 @@ import PageTransition from "../feedback/PageTransition";
 const pageTitles = {
   // Central page title map so the shared header always knows what to display.
   "/dashboard": {
-    title: "Requester Workspace",
-    subtitle: "Track your requests, next actions, and real-time updates.",
+    title: "My Workspace",
+    subtitle: "See what needs your action and follow your requests.",
   },
   "/requests": {
     title: "My Requests",
-    subtitle: "Review everything you have created across the workflow.",
+    subtitle: "Check drafts, corrections, and submitted requests in one place.",
   },
   "/requests/new": {
-    title: "Create Request",
-    subtitle: "Start a clean procurement draft with a strong audit trail from day one.",
+    title: "New Request",
+    subtitle: "Add the details needed for review and approval.",
   },
   "/admin/dashboard": {
     title: "Admin Dashboard",
@@ -98,7 +98,7 @@ function AppShell() {
     if (location.pathname.startsWith("/requests/") && location.pathname.endsWith("/edit")) {
       return {
         title: "Edit Request",
-        subtitle: "Update the request carefully before saving or resubmitting it.",
+        subtitle: "Make the needed changes before saving or resubmitting.",
       };
     }
 
@@ -108,7 +108,7 @@ function AppShell() {
     ) {
       return {
         title: "Request Details",
-        subtitle: "Review the request, its history, and the next available actions.",
+        subtitle: "See where the request is and what happens next.",
       };
     }
 
