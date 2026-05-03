@@ -1,0 +1,2541 @@
+Api example....
+
+
+const employeeApi = {
+  CREATE: "/employees/create",
+  UPDATE: (id) => `/employees/${id}`,
+  DEACTIVATE: (id) => `/employees/${id}/deactivate`,
+  ACTIVATE: (id) => `/employees/${id}/activate`,
+  GET_BY_ID: (id) => `/employees/${id}`,
+  GET_BY_STORE: (storeId) => `/employees/store/${storeId}`,
+  GET_BY_BRANCH: "/employees/branch",
+};
+
+export default employeeApi;
+
+
+
+
+service example
+
+
+
+import axiosConfig from "../axios/axiosConfig.jsx"
+import authApi from "../apis/authApi.js";
+
+//login
+export const login = async (credentials)=>{
+    const response = await  axiosConfig.post(authApi.LOGIN,credentials)
+    return response.data
+}
+
+//logout
+export const logout = async () => {
+    await  axiosConfig.post(authApi.LOGOUT)
+}
+
+export const fetchCurrentUser = async (config = {}) => {
+    const response = await axiosConfig.get(authApi.ME, config);
+    return response.data;
+};
+
+export const refreshSession = async () => {
+    const response = await axiosConfig.post(authApi.REFRESH);
+    return response.data;
+};
+
+export const sendVerificationOtp = async (email) => {
+    const response = await axiosConfig.post(authApi.VERIFY_EMAIL_SEND_OTP, { email });
+    return response.data;
+};
+
+export const confirmVerificationOtp = async ({ email, otp }) => {
+    const response = await axiosConfig.post(authApi.VERIFY_EMAIL_CONFIRM_OTP, { email, otp });
+    return response.data;
+};
+
+export const sendPasswordResetOtp = async (email) => {
+    const response = await axiosConfig.post(authApi.PASSWORD_RESET_SEND_OTP, { email });
+    return response.data;
+};
+
+export const confirmPasswordReset = async ({ email, otp, newPassword }) => {
+    const response = await axiosConfig.post(authApi.PASSWORD_RESET_CONFIRM, { email, otp, newPassword });
+    return response.data;
+};
+
+
+
+...axios..
+
+
+
+//error types for error handling
+
+import axios from "axios";
+import { errorStore } from "../store/errorStore.js";
+import safeStorage from "../utils/safeStorage.js";
+import authApi from "../apis/authApi.js";
+import { clearOfflineIndexedDb, mirrorOfflineQueuesToIndexedDb } from "../utils/offlinePersistence.js";
+import { TEST_FEATURES_ENABLED } from "../config/featureFlags.js";
+
+const AUTH_TOKEN_KEY = "auth_token";
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
+const OFFLINE_QUEUE_KEY = "offline_request_queue_v1";
+const OFFLINE_CACHE_KEY = "offline_get_cache_v1";
+const OFFLINE_LAST_SYNC_KEY = "offline_last_sync_v1";
+const OFFLINE_DEAD_LETTER_KEY = "offline_dead_letter_v1";
+const OFFLINE_SYNC_RESULTS_KEY = "offline_sync_results_v1";
+const OFFLINE_SYNC_STATE_KEY = "offline_sync_state_v1";
+const OFFLINE_QUEUE_VERSION_KEY = "offline_queue_version";
+const OFFLINE_AUDIT_LOG_KEY = "offline_audit_log_v1";
+const OFFLINE_TEST_MODE_KEY = "offline_test_mode_v1";
+const OFFLINE_TEST_LATENCY_KEY = "offline_test_latency_v1";
+const OFFLINE_ACTIVE_USER_KEY = "offline_active_user_key_v1";
+const OFFLINE_SNAPSHOT_LAST_KEY = "offline_user_snapshot_last_key_v1";
+const OFFLINE_USER_SNAPSHOT_KEY = "offline_user_snapshot_v1";
+const OFFLINE_LAST_ONLINE_LOGIN_KEY = "offline_last_online_login_v1";
+const OFFLINE_ID_MAP_KEY = "offline_id_map_v1";
+const OFFLINE_ALERT_LAST_KEY = "offline_alert_last_v1";
+const OFFLINE_ALERT_SETTINGS_KEY = "offline_alert_settings_v1";
+const OFFLINE_ALERT_DEVICE_OVERRIDE_KEY = "offline_alert_device_override_v1";
+const OFFLINE_ALERT_TEST_LAST_KEY = "offline_alert_test_last_v1";
+const OFFLINE_ALERT_TEST_HISTORY_KEY = "offline_alert_test_history_v1";
+const OFFLINE_QUEUE_VERSION = 2;
+const OFFLINE_QUEUE_MAX_SIZE = 300;
+const OFFLINE_SYNC_RESULT_MAX = 400;
+const OFFLINE_AUDIT_MAX = 500;
+const OFFLINE_MAX_RETRIES = 5;
+const OFFLINE_BASE_DELAY_MS = 2000;
+const OFFLINE_MAX_DELAY_MS = 30000;
+const ALERT_THROTTLE_MS = 10 * 60 * 1000;
+const DEFAULT_ALERT_COOLDOWN_MINUTES = 10;
+const DEFAULT_ALERT_SETTINGS = {
+    syncConflictEmailEnabled: true,
+    queueFailureEmailEnabled: true,
+    deadLetterThresholdEnabled: true,
+    deadLetterThreshold: 5,
+    queueStuckEnabled: true,
+    queueStuckMinutes: 15,
+};
+const OFFLINE_CIPHER_KEY = "offline_cipher_key_v1";
+const OFFLINE_SESSION_CIPHER_KEY = "offline_session_cipher_v1";
+const OFFLINE_CACHEABLE_PREFIXES = [
+    "/notifications",
+    "/inventory/",
+    "/products/",
+    "/refunds/",
+    "/customers",
+    "/branch/",
+    "/store/",
+    "/category/",
+    "/categories/",
+    "/audit/",
+    "/orders/",
+    "/shifts/",
+];
+const AUTH_ENDPOINTS = new Set([
+    authApi.LOGIN,
+    authApi.LOGOUT,
+    authApi.REFRESH,
+    authApi.VERIFY_EMAIL_SEND_OTP,
+    authApi.VERIFY_EMAIL_CONFIRM_OTP,
+    authApi.PASSWORD_RESET_SEND_OTP,
+    authApi.PASSWORD_RESET_CONFIRM,
+]);
+const refreshClient = axios.create({
+    baseURL: BASE_URL,
+    withCredentials: true,
+    headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+    },
+    timeout: 30000,
+});
+let isRefreshing = false;
+let pendingQueue = [];
+let isFlushingOfflineQueue = false;
+let runtimeCipherKey = null;
+
+const nowTs = () => Date.now();
+
+const getOrCreateCipherKey = () => {
+    if (runtimeCipherKey) return runtimeCipherKey;
+    try {
+        const sessionKey = sessionStorage.getItem(OFFLINE_SESSION_CIPHER_KEY);
+        if (sessionKey) {
+            runtimeCipherKey = sessionKey;
+            return runtimeCipherKey;
+        }
+    } catch {
+        // fallback below
+    }
+    try {
+        const existing = localStorage.getItem(OFFLINE_CIPHER_KEY);
+        if (existing) return existing;
+        const fresh = generateIdempotencyKey();
+        localStorage.setItem(OFFLINE_CIPHER_KEY, fresh);
+        return fresh;
+    } catch {
+        return "offline-fallback-key";
+    }
+};
+
+const xorEncrypt = (plainText) => {
+    const key = getOrCreateCipherKey();
+    const chars = Array.from(plainText).map((ch, i) =>
+        String.fromCharCode(ch.charCodeAt(0) ^ key.charCodeAt(i % key.length))
+    );
+    return `enc:${btoa(chars.join(""))}`;
+};
+
+const xorDecrypt = (cipherText) => {
+    if (!String(cipherText || "").startsWith("enc:")) return cipherText;
+    const raw = atob(String(cipherText).slice(4));
+    const decode = (key) =>
+        Array.from(raw)
+            .map((ch, i) => String.fromCharCode(ch.charCodeAt(0) ^ key.charCodeAt(i % key.length)))
+            .join("");
+    try {
+        return decode(getOrCreateCipherKey());
+    } catch {
+        try {
+            const legacy = localStorage.getItem(OFFLINE_CIPHER_KEY);
+            if (legacy) return decode(legacy);
+        } catch {
+            // no-op
+        }
+        return "[]";
+    }
+};
+
+const hashString = (value = "") => {
+    let hash = 2166136261;
+    const input = String(value || "");
+    for (let i = 0; i < input.length; i += 1) {
+        hash ^= input.charCodeAt(i);
+        hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+    }
+    return Math.abs(hash >>> 0).toString(36);
+};
+
+export const deriveOfflineUserKey = (user) => {
+    if (!user) return null;
+    const raw =
+        user?.id != null
+            ? `id:${user.id}`
+            : user?.email
+            ? `email:${String(user.email).toLowerCase()}`
+            : null;
+    if (!raw) return null;
+    return `u_${hashString(raw)}`;
+};
+
+const readStoredOfflineUserKey = () => {
+    try {
+        const active = localStorage.getItem(OFFLINE_ACTIVE_USER_KEY);
+        if (active) return active;
+        const last = localStorage.getItem(OFFLINE_SNAPSHOT_LAST_KEY);
+        return last || null;
+    } catch {
+        return null;
+    }
+};
+
+export const setOfflineActiveUserKey = (user) => {
+    const key = deriveOfflineUserKey(user);
+    if (!key) return null;
+    try {
+        localStorage.setItem(OFFLINE_ACTIVE_USER_KEY, key);
+        localStorage.setItem(OFFLINE_SNAPSHOT_LAST_KEY, key);
+    } catch {
+        // no-op
+    }
+    return key;
+};
+
+export const getOfflineSnapshotKey = () => readStoredOfflineUserKey();
+
+export const getOfflineScopedKey = (baseKey, userKeyOverride = null) => {
+    const scoped = userKeyOverride || readStoredOfflineUserKey();
+    return scoped ? `${baseKey}:${scoped}` : baseKey;
+};
+
+export const writeOfflineUserSnapshot = (user) => {
+    const key = setOfflineActiveUserKey(user);
+    if (!key) return null;
+    try {
+        localStorage.setItem(getOfflineScopedKey(OFFLINE_USER_SNAPSHOT_KEY, key), JSON.stringify(user || null));
+        localStorage.setItem(OFFLINE_SNAPSHOT_LAST_KEY, key);
+    } catch {
+        // no-op
+    }
+    return key;
+};
+
+export const readOfflineUserSnapshot = (userKeyOverride = null) => {
+    try {
+        const key = userKeyOverride || readStoredOfflineUserKey();
+        if (!key) return null;
+        return JSON.parse(localStorage.getItem(getOfflineScopedKey(OFFLINE_USER_SNAPSHOT_KEY, key)) || "null");
+    } catch {
+        return null;
+    }
+};
+
+export const writeOfflineLastOnlineLoginTs = (ts, userKeyOverride = null) => {
+    try {
+        localStorage.setItem(getOfflineScopedKey(OFFLINE_LAST_ONLINE_LOGIN_KEY, userKeyOverride), String(ts));
+    } catch {
+        // no-op
+    }
+};
+
+export const readOfflineLastOnlineLoginTs = (userKeyOverride = null) => {
+    try {
+        const raw = localStorage.getItem(getOfflineScopedKey(OFFLINE_LAST_ONLINE_LOGIN_KEY, userKeyOverride));
+        return raw ? Number(raw) : null;
+    } catch {
+        return null;
+    }
+};
+
+export const writeOfflineLastSyncTs = (ts, userKeyOverride = null) => {
+    try {
+        localStorage.setItem(getOfflineScopedKey(OFFLINE_LAST_SYNC_KEY, userKeyOverride), String(ts));
+        emitOfflineSyncUpdate();
+    } catch {
+        // no-op
+    }
+};
+
+export const readOfflineLastSyncTs = (userKeyOverride = null) => {
+    try {
+        const raw = localStorage.getItem(getOfflineScopedKey(OFFLINE_LAST_SYNC_KEY, userKeyOverride));
+        return raw ? Number(raw) : null;
+    } catch {
+        return null;
+    }
+};
+
+export const removeOfflineUserSnapshot = (user) => {
+    const key = deriveOfflineUserKey(user);
+    if (!key) return;
+    try {
+        localStorage.removeItem(getOfflineScopedKey(OFFLINE_USER_SNAPSHOT_KEY, key));
+        if (localStorage.getItem(OFFLINE_SNAPSHOT_LAST_KEY) === key) {
+            localStorage.removeItem(OFFLINE_SNAPSHOT_LAST_KEY);
+        }
+        if (localStorage.getItem(OFFLINE_ACTIVE_USER_KEY) === key) {
+            localStorage.removeItem(OFFLINE_ACTIVE_USER_KEY);
+        }
+    } catch {
+        // no-op
+    }
+};
+
+export const initializeOfflineSecurityContext = ({ user, token }) => {
+    const base = `${user?.id || "anon"}:${user?.email || "no-email"}:${token || "no-token"}`;
+    const derived = `sec-${hashString(base)}-${hashString(`${base}:v2`)}`;
+    runtimeCipherKey = derived;
+    try {
+        sessionStorage.setItem(OFFLINE_SESSION_CIPHER_KEY, derived);
+    } catch {
+        // no-op
+    }
+    return derived;
+};
+
+const flushPendingQueue = (token, error) => {
+    pendingQueue.forEach(({ resolve, reject }) => {
+        if (error) {
+            reject(error);
+            return;
+        }
+        resolve(token);
+    });
+    pendingQueue = [];
+};
+
+const isAuthEndpoint = (url = "") => {
+    const cleanUrl = String(url || "").split("?")[0];
+    return AUTH_ENDPOINTS.has(cleanUrl);
+};
+
+const clearSessionAndRedirect = () => {
+    localStorage.removeItem("auth-storage");
+    sessionStorage.removeItem("auth-storage");
+    safeStorage.removeItem(AUTH_TOKEN_KEY);
+
+    const currentPath = window.location.pathname || "";
+    const isPublicPage =
+        currentPath === "/" ||
+        currentPath === "/home" ||
+        currentPath === "/thank-you" ||
+        currentPath === "/support" ||
+        currentPath === "/verify-email" ||
+        currentPath === "/forgot-password";
+
+    if (!isPublicPage && window.location.pathname !== "/login") {
+        window.location.href = "/login";
+    }
+};
+
+const getOfflineTestConfig = () => {
+    // Production: developer offline simulation is disabled.
+    // Keep this returning an empty config so any stale localStorage flag is ignored.
+    return {};
+};
+
+const isForcedOffline = () => {
+    return false;
+};
+
+const getOfflineTestLatencyMs = () => {
+    return 0;
+};
+
+const isBrowserOnline = () => (typeof navigator === "undefined" ? true : navigator.onLine !== false);
+
+const effectiveOnline = () => (isForcedOffline() ? false : isBrowserOnline());
+
+export const getEffectiveOnline = () => effectiveOnline();
+
+const normalizeUrl = (url = "") => String(url || "").split("?")[0];
+
+const shouldCacheGetRequest = (url = "") => {
+    const cleaned = normalizeUrl(url);
+    return OFFLINE_CACHEABLE_PREFIXES.some((prefix) => cleaned.startsWith(prefix));
+};
+
+const emitOfflineSyncUpdate = () => {
+    if (typeof window === "undefined") return;
+    evaluateQueueAlertConditions();
+    window.dispatchEvent(new CustomEvent("offline-sync-updated"));
+};
+
+const resolveOfflineKey = (baseKey) => getOfflineScopedKey(baseKey);
+
+const getCacheKey = (config) => {
+    const method = String(config?.method || "get").toUpperCase();
+    const url = normalizeUrl(config?.url || "");
+    const params = config?.params ? JSON.stringify(config.params) : "";
+    return `${method}:${url}:${params}`;
+};
+
+const loadOfflineCache = () => {
+    try {
+        return JSON.parse(localStorage.getItem(resolveOfflineKey(OFFLINE_CACHE_KEY)) || "{}");
+    } catch {
+        return {};
+    }
+};
+
+const saveOfflineCache = (cache) => {
+    try {
+        localStorage.setItem(resolveOfflineKey(OFFLINE_CACHE_KEY), JSON.stringify(cache));
+    } catch {
+        // no-op if storage is unavailable
+    }
+};
+
+const saveGetCache = (config, data) => {
+    const key = getCacheKey(config);
+    const cache = loadOfflineCache();
+    cache[key] = {
+        ts: Date.now(),
+        data,
+    };
+    saveOfflineCache(cache);
+};
+
+const readGetCache = (config) => {
+    const key = getCacheKey(config);
+    const cache = loadOfflineCache();
+    return cache[key]?.data ?? null;
+};
+
+export const clearOfflineGetCacheByUrl = (url, params = null) => {
+    const key = getCacheKey({ method: "get", url, params });
+    const cache = loadOfflineCache();
+    if (cache[key] !== undefined) {
+        delete cache[key];
+        saveOfflineCache(cache);
+    }
+};
+
+const loadOfflineQueue = () => {
+    try {
+        const raw = localStorage.getItem(resolveOfflineKey(OFFLINE_QUEUE_KEY)) || "[]";
+        const decoded = xorDecrypt(raw);
+        return JSON.parse(decoded || "[]");
+    } catch {
+        return [];
+    }
+};
+
+const saveOfflineQueue = (queue) => {
+    try {
+        localStorage.setItem(resolveOfflineKey(OFFLINE_QUEUE_KEY), xorEncrypt(JSON.stringify(queue)));
+        emitOfflineSyncUpdate();
+        mirrorOfflineQueuesToIndexedDb({
+            queue,
+            deadLetter: loadDeadLetterQueue(),
+            syncResults: loadSyncResults(),
+            userKey: getOfflineSnapshotKey(),
+        }).catch(() => {});
+    } catch {
+        // no-op if storage is unavailable
+    }
+};
+
+const loadDeadLetterQueue = () => {
+    try {
+        const raw = localStorage.getItem(resolveOfflineKey(OFFLINE_DEAD_LETTER_KEY)) || "[]";
+        const decoded = xorDecrypt(raw);
+        return JSON.parse(decoded || "[]");
+    } catch {
+        return [];
+    }
+};
+
+const saveDeadLetterQueue = (queue) => {
+    try {
+        localStorage.setItem(
+            resolveOfflineKey(OFFLINE_DEAD_LETTER_KEY),
+            xorEncrypt(JSON.stringify(queue.slice(-OFFLINE_QUEUE_MAX_SIZE)))
+        );
+        emitOfflineSyncUpdate();
+        mirrorOfflineQueuesToIndexedDb({
+            queue: loadOfflineQueue(),
+            deadLetter: queue.slice(-OFFLINE_QUEUE_MAX_SIZE),
+            syncResults: loadSyncResults(),
+            userKey: getOfflineSnapshotKey(),
+        }).catch(() => {});
+    } catch {
+        // no-op if storage is unavailable
+    }
+};
+
+const loadSyncResults = () => {
+    try {
+        const raw = localStorage.getItem(resolveOfflineKey(OFFLINE_SYNC_RESULTS_KEY)) || "[]";
+        const decoded = xorDecrypt(raw);
+        return JSON.parse(decoded || "[]");
+    } catch {
+        return [];
+    }
+};
+
+const saveSyncResults = (rows) => {
+    try {
+        localStorage.setItem(
+            resolveOfflineKey(OFFLINE_SYNC_RESULTS_KEY),
+            xorEncrypt(JSON.stringify(rows.slice(-OFFLINE_SYNC_RESULT_MAX)))
+        );
+        emitOfflineSyncUpdate();
+        mirrorOfflineQueuesToIndexedDb({
+            queue: loadOfflineQueue(),
+            deadLetter: loadDeadLetterQueue(),
+            syncResults: rows.slice(-OFFLINE_SYNC_RESULT_MAX),
+            userKey: getOfflineSnapshotKey(),
+        }).catch(() => {});
+    } catch {
+        // no-op if storage is unavailable
+    }
+};
+
+const appendSyncResult = (row) => {
+    const results = loadSyncResults();
+    results.push({
+        id: generateIdempotencyKey(),
+        ts: nowTs(),
+        ...row,
+    });
+    saveSyncResults(results);
+};
+
+const loadOfflineAuditLog = () => {
+    try {
+        return JSON.parse(localStorage.getItem(resolveOfflineKey(OFFLINE_AUDIT_LOG_KEY)) || "[]");
+    } catch {
+        return [];
+    }
+};
+
+const saveOfflineAuditLog = (rows) => {
+    try {
+        localStorage.setItem(resolveOfflineKey(OFFLINE_AUDIT_LOG_KEY), JSON.stringify(rows.slice(-OFFLINE_AUDIT_MAX)));
+    } catch {
+        // no-op
+    }
+};
+
+const appendOfflineAuditLog = (entry) => {
+    const rows = loadOfflineAuditLog();
+    rows.push({
+        id: generateIdempotencyKey(),
+        createdAt: nowTs(),
+        status: "queued",
+        ...entry,
+    });
+    saveOfflineAuditLog(rows);
+};
+
+const loadOfflineIdMap = () => {
+    try {
+        return JSON.parse(localStorage.getItem(resolveOfflineKey(OFFLINE_ID_MAP_KEY)) || "{}");
+    } catch {
+        return {};
+    }
+};
+
+const saveOfflineIdMap = (map) => {
+    try {
+        localStorage.setItem(resolveOfflineKey(OFFLINE_ID_MAP_KEY), JSON.stringify(map || {}));
+    } catch {
+        // no-op
+    }
+};
+
+const registerOfflineIdMapping = (tempId, realId) => {
+    if (!tempId || !realId || tempId === realId) return;
+    const map = loadOfflineIdMap();
+    map[tempId] = realId;
+    saveOfflineIdMap(map);
+};
+
+const replaceTempIds = (value, idMap) => {
+    if (!value) return value;
+    if (typeof value === "string") {
+        return idMap[value] || value;
+    }
+    if (Array.isArray(value)) {
+        return value.map((entry) => replaceTempIds(entry, idMap));
+    }
+    if (typeof value === "object") {
+        const next = {};
+        Object.entries(value).forEach(([key, val]) => {
+            const replaced = replaceTempIds(val, idMap);
+            next[key] = replaced;
+        });
+        return next;
+    }
+    return value;
+};
+
+const replaceTempIdsInUrl = (value, idMap) => {
+    if (!value || typeof value !== "string") return value;
+    let next = value;
+    Object.entries(idMap || {}).forEach(([tempId, realId]) => {
+        if (!tempId || !realId) return;
+        next = next.split(tempId).join(String(realId));
+    });
+    return next;
+};
+
+const extractResponseId = (payload) => {
+    if (!payload || typeof payload !== "object") return null;
+    if (payload.id != null) return payload.id;
+    if (payload.data && typeof payload.data === "object" && payload.data.id != null) {
+        return payload.data.id;
+    }
+    if (payload.entity && typeof payload.entity === "object" && payload.entity.id != null) {
+        return payload.entity.id;
+    }
+    return null;
+};
+
+const markOfflineAuditSynced = (queueItemId) => {
+    const rows = loadOfflineAuditLog();
+    const next = rows.map((row) =>
+        row.queueItemId === queueItemId
+            ? { ...row, status: "synced", syncedAt: nowTs() }
+            : row
+    );
+    saveOfflineAuditLog(next);
+};
+
+const setSyncState = (state) => {
+    try {
+        localStorage.setItem(resolveOfflineKey(OFFLINE_SYNC_STATE_KEY), JSON.stringify(state));
+        emitOfflineSyncUpdate();
+    } catch {
+        // no-op
+    }
+};
+
+const readSyncState = () => {
+    try {
+        return JSON.parse(localStorage.getItem(resolveOfflineKey(OFFLINE_SYNC_STATE_KEY)) || "{}");
+    } catch {
+        return {};
+    }
+};
+
+const computeRetryDelayMs = (retries = 0) => {
+    const exp = Math.min(OFFLINE_MAX_DELAY_MS, OFFLINE_BASE_DELAY_MS * Math.pow(2, Math.max(0, retries)));
+    const jitter = Math.floor(Math.random() * 1000);
+    return exp + jitter;
+};
+
+const saveLastOfflineSyncTs = (ts) => {
+    writeOfflineLastSyncTs(ts);
+};
+
+const readLastOfflineSyncTs = () => {
+    return readOfflineLastSyncTs();
+};
+
+const generateIdempotencyKey = () => {
+    try {
+        if (typeof crypto !== "undefined" && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+    } catch {
+        // fallback below
+    }
+    return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const isMutationMethod = (method = "") =>
+    ["post", "put", "patch", "delete"].includes(String(method || "").toLowerCase());
+
+const isDuplicateConflict = (status, data) => {
+    const message = String(data?.message || data?.error || "").toLowerCase();
+    return status === 409 || (status === 400 && (message.includes("duplicate") || message.includes("already exists")));
+};
+
+const classifyDeadLetterReason = ({ status, data, fallbackMessage, item }) => {
+    const code = String(data?.code || data?.type || "").toUpperCase();
+    const message = String(data?.message || data?.error || fallbackMessage || "").toLowerCase();
+    const path = String(item?.url || "").toLowerCase();
+
+    if (
+        code.includes("INSUFFICIENT_STOCK") ||
+        message.includes("insufficient stock") ||
+        message.includes("not enough stock")
+    ) {
+        return {
+            reasonCode: "INSUFFICIENT_STOCK",
+            resolutionHint: "Reduce quantities or re-stock before retrying.",
+        };
+    }
+
+    if (
+        code.includes("PRICE_CHANGED") ||
+        message.includes("price changed") ||
+        message.includes("price mismatch")
+    ) {
+        return {
+            reasonCode: "PRICE_CHANGED",
+            resolutionHint: "Refresh product prices and update order payload before retrying.",
+        };
+    }
+
+    if (
+        code.includes("CUSTOMER_NOT_FOUND") ||
+        message.includes("customer not found") ||
+        message.includes("unknown customer")
+    ) {
+        return {
+            reasonCode: "CUSTOMER_MISSING",
+            resolutionHint: "Set customer to walk-in or select a valid customer.",
+        };
+    }
+
+    if (status === 413 || message.includes("too large") || message.includes("payload too large")) {
+        return {
+            reasonCode: "REQUEST_TOO_LARGE",
+            resolutionHint: "Split the operation into smaller batches and retry.",
+        };
+    }
+
+    if (path.includes("/orders")) {
+        return {
+            reasonCode: "ORDER_SYNC_FAILED",
+            resolutionHint: "Review order payload and retry.",
+        };
+    }
+
+    return {
+        reasonCode: "UNKNOWN_SYNC_ERROR",
+        resolutionHint: "Review payload and retry from queue.",
+    };
+};
+
+const migrateOfflineStorageIfNeeded = () => {
+    try {
+        const version = Number(localStorage.getItem(resolveOfflineKey(OFFLINE_QUEUE_VERSION_KEY)) || "1");
+        if (version >= OFFLINE_QUEUE_VERSION) return;
+
+        const decodeLegacy = (raw, fallback = []) => {
+            if (!raw) return fallback;
+            if (String(raw).startsWith("enc:")) {
+                try {
+                    return JSON.parse(xorDecrypt(raw) || "[]");
+                } catch {
+                    return fallback;
+                }
+            }
+            try {
+                return JSON.parse(raw);
+            } catch {
+                return fallback;
+            }
+        };
+
+        const legacyQueueRaw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+        const legacyDeadRaw = localStorage.getItem(OFFLINE_DEAD_LETTER_KEY);
+        const legacyResultsRaw = localStorage.getItem(OFFLINE_SYNC_RESULTS_KEY);
+
+        const plainQueue = decodeLegacy(legacyQueueRaw, []);
+        const plainDead = decodeLegacy(legacyDeadRaw, []);
+        const plainResults = decodeLegacy(legacyResultsRaw, []);
+
+        if (legacyQueueRaw && !localStorage.getItem(resolveOfflineKey(OFFLINE_QUEUE_KEY))) {
+            localStorage.setItem(resolveOfflineKey(OFFLINE_QUEUE_KEY), xorEncrypt(JSON.stringify(plainQueue)));
+        }
+        if (legacyDeadRaw && !localStorage.getItem(resolveOfflineKey(OFFLINE_DEAD_LETTER_KEY))) {
+            localStorage.setItem(resolveOfflineKey(OFFLINE_DEAD_LETTER_KEY), xorEncrypt(JSON.stringify(plainDead)));
+        }
+        if (legacyResultsRaw && !localStorage.getItem(resolveOfflineKey(OFFLINE_SYNC_RESULTS_KEY))) {
+            localStorage.setItem(resolveOfflineKey(OFFLINE_SYNC_RESULTS_KEY), xorEncrypt(JSON.stringify(plainResults)));
+        }
+        localStorage.setItem(resolveOfflineKey(OFFLINE_QUEUE_VERSION_KEY), String(OFFLINE_QUEUE_VERSION));
+    } catch {
+        // no-op
+    }
+};
+
+const queueOfflineMutation = (config) => {
+    const queue = loadOfflineQueue();
+    const existingIdempotency = config.headers?.["X-Idempotency-Key"] || config.headers?.["x-idempotency-key"];
+    const idempotencyKey = existingIdempotency || generateIdempotencyKey();
+    const clientTempId = config.__clientTempId || config.headers?.["X-Client-Temp-Id"];
+    const item = {
+        id: idempotencyKey,
+        method: String(config.method || "post").toLowerCase(),
+        url: config.url,
+        data: config.data ?? null,
+        params: config.params ?? null,
+        clientTempId: clientTempId || null,
+        headers: {
+            ...(config.headers || {}),
+            "X-Idempotency-Key": idempotencyKey,
+        },
+        createdAt: Date.now(),
+        retries: 0,
+        lastError: null,
+        nextRetryAt: 0,
+        status: "queued",
+    };
+    queue.push(item);
+    saveOfflineQueue(queue.slice(-OFFLINE_QUEUE_MAX_SIZE));
+    appendOfflineAuditLog({
+        queueItemId: item.id,
+        action: `${String(item.method || "").toUpperCase()} ${item.url}`,
+        url: item.url,
+        method: String(item.method || "").toUpperCase(),
+    });
+    appendSyncResult({
+        queueItemId: item.id,
+        url: item.url,
+        method: String(item.method || "").toUpperCase(),
+        status: "QUEUED",
+        message: "Queued while offline",
+    });
+    return idempotencyKey;
+};
+
+const flushOfflineQueue = async () => {
+    if (isFlushingOfflineQueue) return;
+    if (!effectiveOnline()) return;
+    const queue = loadOfflineQueue();
+    if (!queue.length) return;
+    isFlushingOfflineQueue = true;
+    setSyncState({
+        inProgress: true,
+        startedAt: nowTs(),
+        processedCount: 0,
+        totalToProcess: queue.length,
+        currentItemId: null,
+    });
+    const remaining = [];
+    const deadLetter = loadDeadLetterQueue();
+    const currentTime = nowTs();
+    const idMap = loadOfflineIdMap();
+    let processedCount = 0;
+    for (const item of queue) {
+        if (Number(item.nextRetryAt || 0) > currentTime) {
+            remaining.push(item);
+            continue;
+        }
+        setSyncState({
+            inProgress: true,
+            startedAt: nowTs(),
+            processedCount,
+            totalToProcess: queue.length,
+            currentItemId: item.id,
+        });
+        try {
+            const preparedData = replaceTempIds(item.data, idMap);
+            const preparedParams = replaceTempIds(item.params, idMap);
+            const preparedUrl = replaceTempIdsInUrl(item.url, idMap);
+            const response = await axiosConfig.request({
+                method: item.method,
+                url: preparedUrl,
+                data: preparedData,
+                params: preparedParams,
+                headers: item.headers,
+                __skipOfflineQueue: true,
+                __fromOfflineQueue: true,
+            });
+            const resolvedId = extractResponseId(response?.data);
+            if (item.clientTempId && resolvedId) {
+                registerOfflineIdMapping(item.clientTempId, resolvedId);
+                idMap[item.clientTempId] = resolvedId;
+            }
+            markOfflineAuditSynced(item.id);
+            appendSyncResult({
+                queueItemId: item.id,
+                url: item.url,
+                method: String(item.method || "").toUpperCase(),
+                status: "SYNCED",
+                message: "Successfully synced",
+            });
+        } catch (err) {
+            const status = err?.response?.status;
+            const data = err?.response?.data;
+            if (isDuplicateConflict(status, data)) {
+                const resolvedId = extractResponseId(data);
+                if (item.clientTempId && resolvedId) {
+                    registerOfflineIdMapping(item.clientTempId, resolvedId);
+                    idMap[item.clientTempId] = resolvedId;
+                }
+                appendSyncResult({
+                    queueItemId: item.id,
+                    url: item.url,
+                    method: String(item.method || "").toUpperCase(),
+                    status: "DUPLICATE",
+                    message: "Skipped duplicate on sync",
+                });
+                continue;
+            }
+            if (!err?.response) {
+                // Still offline/network unstable; keep current + remaining queue.
+                remaining.push(item, ...queue.slice(queue.indexOf(item) + 1));
+                break;
+            }
+            const nextRetries = Number(item.retries || 0) + 1;
+            const failMessage = data?.message || data?.error || `HTTP ${status}`;
+            if (nextRetries >= OFFLINE_MAX_RETRIES) {
+                const classified = classifyDeadLetterReason({
+                    status,
+                    data,
+                    fallbackMessage: failMessage,
+                    item,
+                });
+                deadLetter.push({
+                    ...item,
+                    retries: nextRetries,
+                    lastError: failMessage,
+                    movedToDeadLetterAt: nowTs(),
+                    status: "dead_letter",
+                    reasonCode: classified.reasonCode,
+                    resolutionHint: classified.resolutionHint,
+                });
+                appendSyncResult({
+                    queueItemId: item.id,
+                    url: item.url,
+                    method: String(item.method || "").toUpperCase(),
+                    status: "DEAD_LETTER",
+                    message: `${classified.reasonCode}: ${failMessage}`,
+                });
+                sendSyncAlertEvent({
+                    type: "SYNC_CONFLICT",
+                    message: classified.reasonCode,
+                    details: failMessage,
+                    queueDepth: queue.length,
+                    deadLetterCount: deadLetter.length,
+                    failureCount: nextRetries,
+                });
+            } else {
+                remaining.push({
+                ...item,
+                retries: nextRetries,
+                status: "retry_pending",
+                nextRetryAt: nowTs() + computeRetryDelayMs(nextRetries),
+                lastError: failMessage,
+            });
+                appendSyncResult({
+                    queueItemId: item.id,
+                    url: item.url,
+                    method: String(item.method || "").toUpperCase(),
+                    status: "FAILED",
+                    message: failMessage,
+                });
+                if (nextRetries === 3) {
+                    sendSyncAlertEvent({
+                        type: "QUEUE_FAILURE",
+                        message: "Queue item failed multiple times",
+                        details: failMessage,
+                        queueDepth: queue.length,
+                        deadLetterCount: deadLetter.length,
+                        failureCount: nextRetries,
+                    });
+                }
+            }
+        }
+        processedCount += 1;
+    }
+
+    saveOfflineQueue(remaining);
+    saveDeadLetterQueue(deadLetter);
+    if (remaining.length === 0) {
+        saveLastOfflineSyncTs(Date.now());
+    }
+    isFlushingOfflineQueue = false;
+    setSyncState({
+        inProgress: false,
+        endedAt: nowTs(),
+        processedCount,
+        totalToProcess: queue.length,
+        currentItemId: null,
+    });
+};
+
+if (typeof window !== "undefined") {
+    migrateOfflineStorageIfNeeded();
+    mirrorOfflineQueuesToIndexedDb({
+        queue: loadOfflineQueue(),
+        deadLetter: loadDeadLetterQueue(),
+        syncResults: loadSyncResults(),
+        userKey: getOfflineSnapshotKey(),
+    }).catch(() => {});
+    window.addEventListener("online", () => {
+        flushOfflineQueue().catch(() => {});
+    });
+    // Try once at app boot to replay any queued operations from prior offline sessions.
+    setTimeout(() => {
+        flushOfflineQueue().catch(() => {});
+    }, 1000);
+    setTimeout(() => {
+        evaluateQueueAlertConditions();
+    }, 1200);
+    setInterval(() => {
+        evaluateQueueAlertConditions();
+    }, 60 * 1000);
+}
+
+export const purgeSensitiveOfflineData = async () => {
+    try {
+        const keys = [
+            OFFLINE_QUEUE_KEY,
+            OFFLINE_CACHE_KEY,
+            OFFLINE_LAST_SYNC_KEY,
+            OFFLINE_DEAD_LETTER_KEY,
+            OFFLINE_SYNC_RESULTS_KEY,
+            OFFLINE_SYNC_STATE_KEY,
+            OFFLINE_AUDIT_LOG_KEY,
+            OFFLINE_ID_MAP_KEY,
+            OFFLINE_QUEUE_VERSION_KEY,
+            "offline_receipts_v1",
+        ];
+        keys.forEach((key) => {
+            localStorage.removeItem(resolveOfflineKey(key));
+        });
+        sessionStorage.removeItem(OFFLINE_SESSION_CIPHER_KEY);
+        runtimeCipherKey = null;
+    } catch {
+        // no-op
+    }
+    await clearOfflineIndexedDb({ userKey: getOfflineSnapshotKey() }).catch(() => {});
+    emitOfflineSyncUpdate();
+};
+
+export const repairOfflineState = async () => {
+    try {
+        localStorage.removeItem(resolveOfflineKey(OFFLINE_CACHE_KEY));
+        localStorage.removeItem(resolveOfflineKey(OFFLINE_SYNC_RESULTS_KEY));
+        localStorage.removeItem(resolveOfflineKey(OFFLINE_SYNC_STATE_KEY));
+    } catch {
+        // no-op
+    }
+    await flushOfflineQueue().catch(() => {});
+    emitOfflineSyncUpdate();
+};
+
+export const getOfflineQueueStatus = () => {
+    const queue = loadOfflineQueue();
+    const deadLetter = loadDeadLetterQueue();
+    const failedCount = queue.filter((item) => Number(item.retries || 0) > 0).length;
+    const syncState = readSyncState();
+    return {
+        queuedCount: queue.length,
+        failedCount,
+        deadLetterCount: deadLetter.length,
+        isOnline: effectiveOnline(),
+        lastSyncAt: readLastOfflineSyncTs(),
+        sync: syncState,
+    };
+};
+
+export const flushOfflineQueueNow = async () => {
+    await flushOfflineQueue();
+    return getOfflineQueueStatus();
+};
+
+export const getOfflineQueueItems = () => {
+    const queue = loadOfflineQueue();
+    return [...queue].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+};
+
+export const removeOfflineQueueItem = (id) => {
+    const queue = loadOfflineQueue();
+    const next = queue.filter((item) => item.id !== id);
+    saveOfflineQueue(next);
+    return next.length;
+};
+
+export const clearOfflineQueue = () => {
+    saveOfflineQueue([]);
+};
+
+export const getOfflineDeadLetterItems = () => {
+    const rows = loadDeadLetterQueue();
+    return [...rows].sort((a, b) => Number(b.movedToDeadLetterAt || 0) - Number(a.movedToDeadLetterAt || 0));
+};
+
+export const clearOfflineDeadLetter = () => {
+    saveDeadLetterQueue([]);
+};
+
+export const getOfflineSyncResults = () => {
+    const rows = loadSyncResults();
+    return [...rows].sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+};
+
+export const clearOfflineSyncResults = () => {
+    saveSyncResults([]);
+};
+
+export const retryDeadLetterItem = (id) => {
+    const dead = loadDeadLetterQueue();
+    const idx = dead.findIndex((x) => x.id === id);
+    if (idx === -1) return false;
+    const [item] = dead.splice(idx, 1);
+    item.retries = 0;
+    item.lastError = null;
+    item.status = "queued";
+    item.nextRetryAt = 0;
+    const queue = loadOfflineQueue();
+    queue.push(item);
+    saveDeadLetterQueue(dead);
+    saveOfflineQueue(queue.slice(-OFFLINE_QUEUE_MAX_SIZE));
+    return true;
+};
+
+export const updateDeadLetterItemPayload = (id, nextData) => {
+    const dead = loadDeadLetterQueue();
+    const idx = dead.findIndex((x) => x.id === id);
+    if (idx === -1) return false;
+    dead[idx] = {
+        ...dead[idx],
+        data: nextData,
+        status: "dead_letter_edited",
+        editedAt: nowTs(),
+    };
+    saveDeadLetterQueue(dead);
+    return true;
+};
+
+export const getOfflineAuditLogSummary = () => {
+    const rows = loadOfflineAuditLog();
+    const queued = rows.filter((r) => r.status === "queued").length;
+    const synced = rows.filter((r) => r.status === "synced").length;
+    return {
+        total: rows.length,
+        queued,
+        synced,
+        lastEntryAt: rows.length ? rows[rows.length - 1].createdAt : null,
+    };
+};
+
+const readAlertLastSent = () => {
+    try {
+        const raw = safeStorage.getItem(OFFLINE_ALERT_LAST_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
+    }
+};
+
+const writeAlertLastSent = (next) => {
+    try {
+        safeStorage.setItem(OFFLINE_ALERT_LAST_KEY, JSON.stringify(next));
+    } catch {
+        // no-op
+    }
+};
+
+const shouldSendAlert = (type) => {
+    const state = readAlertLastSent();
+    const last = Number(state[type] || 0);
+    const deviceOverride = readAlertDeviceOverride();
+    const cooldownMinutes = deviceOverride?.enabled
+        ? Number(deviceOverride.cooldownMinutes || DEFAULT_ALERT_COOLDOWN_MINUTES)
+        : DEFAULT_ALERT_COOLDOWN_MINUTES;
+    const cooldownMs = Math.max(1, cooldownMinutes) * 60 * 1000;
+    const effectiveCooldown = deviceOverride?.enabled ? cooldownMs : ALERT_THROTTLE_MS;
+    return !last || Date.now() - last > effectiveCooldown;
+};
+
+const markAlertSent = (type) => {
+    const state = readAlertLastSent();
+    state[type] = Date.now();
+    writeAlertLastSent(state);
+};
+
+const sendSyncAlertEvent = async (payload) => {
+    if (!effectiveOnline()) return;
+    if (!payload?.type) return;
+    if (!shouldSendAlert(payload.type)) return;
+    try {
+        await axiosConfig.post("/alerts/sync-event", payload, { __skipOfflineQueue: true });
+        markAlertSent(payload.type);
+    } catch {
+        // ignore alert failures
+    }
+};
+
+const readAlertSettingsCache = () => {
+    try {
+        const raw = safeStorage.getItem(OFFLINE_ALERT_SETTINGS_KEY);
+        if (!raw) return { ...DEFAULT_ALERT_SETTINGS };
+        const parsed = JSON.parse(raw);
+        return { ...DEFAULT_ALERT_SETTINGS, ...(parsed || {}) };
+    } catch {
+        return { ...DEFAULT_ALERT_SETTINGS };
+    }
+};
+
+const writeAlertSettingsCache = (next) => {
+    try {
+        safeStorage.setItem(OFFLINE_ALERT_SETTINGS_KEY, JSON.stringify(next));
+    } catch {
+        // no-op
+    }
+};
+
+export const getAlertSettingsCache = () => readAlertSettingsCache();
+export const setAlertSettingsCache = (next) => writeAlertSettingsCache({ ...DEFAULT_ALERT_SETTINGS, ...(next || {}) });
+export const getOfflineAlertLastSent = () => readAlertLastSent();
+
+const readAlertDeviceOverride = () => {
+    try {
+        const raw = safeStorage.getItem(OFFLINE_ALERT_DEVICE_OVERRIDE_KEY);
+        if (!raw) return { enabled: false, cooldownMinutes: DEFAULT_ALERT_COOLDOWN_MINUTES };
+        const parsed = JSON.parse(raw);
+        return {
+            enabled: false,
+            cooldownMinutes: DEFAULT_ALERT_COOLDOWN_MINUTES,
+            ...(parsed || {}),
+        };
+    } catch {
+        return { enabled: false, cooldownMinutes: DEFAULT_ALERT_COOLDOWN_MINUTES };
+    }
+};
+
+const writeAlertDeviceOverride = (next) => {
+    try {
+        safeStorage.setItem(OFFLINE_ALERT_DEVICE_OVERRIDE_KEY, JSON.stringify(next));
+    } catch {
+        // no-op
+    }
+};
+
+export const getAlertDeviceOverride = () => readAlertDeviceOverride();
+export const setAlertDeviceOverride = (next) => writeAlertDeviceOverride(next);
+export const resetAlertDeviceOverride = () => {
+    try {
+        safeStorage.removeItem(OFFLINE_ALERT_DEVICE_OVERRIDE_KEY);
+    } catch {
+        // no-op
+    }
+};
+export const getOfflineAlertTestLast = () => {
+    try {
+        const raw = safeStorage.getItem(OFFLINE_ALERT_TEST_LAST_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+};
+export const recordOfflineAlertTest = (payload) => {
+    try {
+        const type = typeof payload === "string" ? payload : payload?.type;
+        const actor = typeof payload === "string" ? null : payload?.actor;
+        const actorRole = typeof payload === "string" ? null : payload?.actorRole;
+        const entry = { type, ts: Date.now(), actor, actorRole };
+        safeStorage.setItem(
+            OFFLINE_ALERT_TEST_LAST_KEY,
+            JSON.stringify(entry)
+        );
+        const rawHistory = safeStorage.getItem(OFFLINE_ALERT_TEST_HISTORY_KEY);
+        const history = rawHistory ? JSON.parse(rawHistory) : [];
+        const nextHistory = [entry, ...(Array.isArray(history) ? history : [])].slice(0, 5);
+        safeStorage.setItem(OFFLINE_ALERT_TEST_HISTORY_KEY, JSON.stringify(nextHistory));
+    } catch {
+        // no-op
+    }
+};
+export const clearOfflineAlertTest = () => {
+    try {
+        safeStorage.removeItem(OFFLINE_ALERT_TEST_LAST_KEY);
+        safeStorage.removeItem(OFFLINE_ALERT_TEST_HISTORY_KEY);
+    } catch {
+        // no-op
+    }
+};
+export const getOfflineAlertTestHistory = () => {
+    try {
+        const raw = safeStorage.getItem(OFFLINE_ALERT_TEST_HISTORY_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+};
+
+const evaluateQueueAlertConditions = () => {
+    const settings = readAlertSettingsCache();
+    const deviceOverride = readAlertDeviceOverride();
+    const effectiveSettings = deviceOverride?.enabled
+        ? {
+            ...settings,
+            deadLetterThreshold: deviceOverride.deadLetterThreshold ?? settings.deadLetterThreshold,
+            queueStuckMinutes: deviceOverride.queueStuckMinutes ?? settings.queueStuckMinutes,
+        }
+        : settings;
+    const queue = loadOfflineQueue();
+    const deadLetter = loadDeadLetterQueue();
+    const sync = readSyncState();
+    const lastSyncAt = readLastOfflineSyncTs();
+
+    if (effectiveSettings.deadLetterThresholdEnabled && Number(effectiveSettings.deadLetterThreshold) > 0) {
+        if (deadLetter.length >= Number(effectiveSettings.deadLetterThreshold)) {
+            sendSyncAlertEvent({
+                type: "DEAD_LETTER_THRESHOLD",
+                message: "Dead-letter queue exceeded threshold",
+                details: `Dead-letter size ${deadLetter.length} reached threshold ${effectiveSettings.deadLetterThreshold}`,
+                queueDepth: queue.length,
+                deadLetterCount: deadLetter.length,
+                failureCount: 0,
+            });
+        }
+    }
+
+    if (effectiveSettings.queueStuckEnabled && Number(effectiveSettings.queueStuckMinutes) > 0) {
+        const minutes = Number(effectiveSettings.queueStuckMinutes);
+        const oldestQueueTs = queue.length
+            ? Math.min(...queue.map((item) => Number(item.createdAt || Date.now())))
+            : 0;
+        const baselineTs = lastSyncAt || oldestQueueTs || 0;
+        const ageMs = baselineTs ? Date.now() - baselineTs : 0;
+        if (
+            queue.length > 0 &&
+            !sync?.inProgress &&
+            baselineTs &&
+            ageMs > minutes * 60 * 1000
+        ) {
+            sendSyncAlertEvent({
+                type: "QUEUE_STUCK",
+                message: "Offline queue stuck",
+                details: `Queue has ${queue.length} item(s) and last sync was ${Math.round(ageMs / 60000)} minutes ago.`,
+                queueDepth: queue.length,
+                deadLetterCount: deadLetter.length,
+                failureCount: 0,
+            });
+        }
+    }
+};
+
+export const setOfflineTestMode = ({ enabled, latencyMs = 0 }) => {
+    // Production: developer offline simulation is disabled.
+    // Always clear any previously persisted test mode so it cannot affect runtime behavior.
+    try {
+        localStorage.removeItem(OFFLINE_TEST_MODE_KEY);
+    } catch {
+        // no-op
+    }
+    emitOfflineSyncUpdate();
+};
+
+export const getOfflineTestMode = () => {
+    return {};
+};
+
+export const retryOfflineQueueItem = async (id) => {
+    const queue = loadOfflineQueue();
+    const index = queue.findIndex((item) => item.id === id);
+    if (index === -1) return { ok: false, reason: "NOT_FOUND" };
+    const item = queue[index];
+    if (!effectiveOnline()) return { ok: false, reason: "OFFLINE" };
+
+    try {
+        const idMap = loadOfflineIdMap();
+        const preparedData = replaceTempIds(item.data, idMap);
+        const preparedParams = replaceTempIds(item.params, idMap);
+        const preparedUrl = replaceTempIdsInUrl(item.url, idMap);
+        await axiosConfig.request({
+            method: item.method,
+            url: preparedUrl,
+            data: preparedData,
+            params: preparedParams,
+            headers: item.headers,
+            __skipOfflineQueue: true,
+            __fromOfflineQueue: true,
+        });
+        markOfflineAuditSynced(item.id);
+        queue.splice(index, 1);
+        saveOfflineQueue(queue);
+        if (queue.length === 0) {
+            saveLastOfflineSyncTs(Date.now());
+        }
+        appendSyncResult({
+            queueItemId: item.id,
+            url: item.url,
+            method: String(item.method || "").toUpperCase(),
+            status: "SYNCED",
+            message: "Manual retry success",
+        });
+        return { ok: true };
+    } catch (err) {
+        const status = err?.response?.status;
+        const data = err?.response?.data;
+        if (isDuplicateConflict(status, data)) {
+            const resolvedId = extractResponseId(data);
+            if (item.clientTempId && resolvedId) {
+                registerOfflineIdMapping(item.clientTempId, resolvedId);
+            }
+            queue.splice(index, 1);
+            saveOfflineQueue(queue);
+            appendSyncResult({
+                queueItemId: item.id,
+                url: item.url,
+                method: String(item.method || "").toUpperCase(),
+                status: "DUPLICATE",
+                message: "Manual retry duplicate",
+            });
+            return { ok: true, duplicate: true };
+        }
+        const nextRetries = Number(item.retries || 0) + 1;
+        const failMessage = data?.message || data?.error || (status ? `HTTP ${status}` : "NETWORK_ERROR");
+        if (nextRetries >= OFFLINE_MAX_RETRIES) {
+            const classified = classifyDeadLetterReason({
+                status,
+                data,
+                fallbackMessage: failMessage,
+                item,
+            });
+            const dead = loadDeadLetterQueue();
+            dead.push({
+                ...item,
+                retries: nextRetries,
+                lastError: failMessage,
+                movedToDeadLetterAt: nowTs(),
+                status: "dead_letter",
+                reasonCode: classified.reasonCode,
+                resolutionHint: classified.resolutionHint,
+            });
+            queue.splice(index, 1);
+            saveDeadLetterQueue(dead);
+            saveOfflineQueue(queue);
+            appendSyncResult({
+                queueItemId: item.id,
+                url: item.url,
+                method: String(item.method || "").toUpperCase(),
+                status: "DEAD_LETTER",
+                message: `${classified.reasonCode}: ${failMessage}`,
+            });
+            sendSyncAlertEvent({
+                type: "SYNC_CONFLICT",
+                message: classified.reasonCode,
+                details: failMessage,
+                queueDepth: queue.length,
+                deadLetterCount: dead.length,
+                failureCount: nextRetries,
+            });
+            return { ok: false, reason: "DEAD_LETTER" };
+        }
+        queue[index] = {
+            ...item,
+            retries: nextRetries,
+            status: "retry_pending",
+            nextRetryAt: nowTs() + computeRetryDelayMs(nextRetries),
+            lastError: failMessage,
+        };
+        saveOfflineQueue(queue);
+        appendSyncResult({
+            queueItemId: item.id,
+            url: item.url,
+            method: String(item.method || "").toUpperCase(),
+            status: "FAILED",
+            message: failMessage,
+        });
+        if (nextRetries === 3) {
+            sendSyncAlertEvent({
+                type: "QUEUE_FAILURE",
+                message: "Queue item failed multiple times",
+                details: failMessage,
+                queueDepth: queue.length,
+                deadLetterCount: loadDeadLetterQueue().length,
+                failureCount: nextRetries,
+            });
+        }
+        return { ok: false, reason: "FAILED" };
+    }
+};
+
+export const ERROR_TYPES ={
+    NETWORK: 'NETWORK_ERROR',
+    VALIDATION:'VALIDATION_ERROR',
+    AUTHENTICATION:'AUTHENTICATION_ERROR',
+    AUTHORIZATION: 'AUTHORIZATION_ERROR',
+    BUSINESS:'BUSINESS_ERROR',
+    SERVER:'SERVER_ERROR',
+    SUCCESS:'SUCCESS',
+    UNKNOWN:'UNKNOWN_ERROR'
+
+}
+
+//an error object
+
+export const createError = (type,message,details =null, status = null) => ({
+    type,
+    message,
+    details,
+    status,
+    timestamp: new Date().toISOString(),
+    id: Math.random().toString(36).substring(2,9)
+
+})
+
+
+const axiosConfig = axios.create({
+    // Use explicit backend URL in deployed environments , fallback to local proxy for dev
+    baseURL: BASE_URL,
+    withCredentials: true,
+    headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+    },timeout : 30000,
+})
+
+// Reused by download links where we cannot use axios interceptors
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
+
+
+//Request  interceptor
+
+axiosConfig.interceptors.request.use(
+    (config) => {
+        if (isForcedOffline() && !config.__skipOfflineQueue) {
+            return Promise.reject({
+                config,
+                code: "OFFLINE_TEST_MODE",
+            });
+        }
+        const latency = getOfflineTestLatencyMs();
+        if (latency > 0) {
+            return new Promise((resolve) => {
+                setTimeout(() => resolve(config), latency);
+            });
+        }
+        const token = safeStorage.getItem(AUTH_TOKEN_KEY);
+        if (token && !config.headers?.Authorization) {
+            config.headers = config.headers || {};
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        const method = String(config.method || "get").toLowerCase();
+        if (isMutationMethod(method)) {
+            config.headers = config.headers || {};
+            if (!config.headers["X-Idempotency-Key"] && !config.headers["x-idempotency-key"]) {
+                config.headers["X-Idempotency-Key"] = generateIdempotencyKey();
+            }
+        }
+        return config;
+    },
+
+    (error)=>{
+        console.error('Request Error: ', error)
+        return Promise.reject(createError(ERROR_TYPES.NETWORK,"Failed to send request"))
+    }
+
+)
+
+//response interceptor for error handling
+
+axiosConfig.interceptors.response.use(
+
+    (response) => {
+        if (String(response.config?.method || "get").toLowerCase() === "get" && shouldCacheGetRequest(response.config?.url)) {
+            saveGetCache(response.config, response.data);
+        }
+        errorStore.getState().clearOnSuccess();
+        return response;
+    },
+    async (error) => {
+        console.error('API Error:', error)
+
+        let errorToReturn;
+
+        //Network error   no response
+        if(!error.response){
+            const config = error.config || {};
+            const method = String(config.method || "get").toLowerCase();
+            const requestUrl = config.url || "";
+
+            if (method === "get" && shouldCacheGetRequest(requestUrl)) {
+                const cachedData = readGetCache(config);
+                if (cachedData != null) {
+                    return Promise.resolve({
+                        data: cachedData,
+                        status: 200,
+                        statusText: "OK (offline cache)",
+                        headers: {},
+                        config,
+                    });
+                }
+            }
+
+            if (
+                isMutationMethod(method) &&
+                !config.__skipOfflineQueue &&
+                !isAuthEndpoint(requestUrl) &&
+                !requestUrl.includes("/ws/")
+            ) {
+                const idempotencyKey = queueOfflineMutation(config);
+                return Promise.resolve({
+                    data: {
+                        queued: true,
+                        offline: true,
+                        idempotencyKey,
+                        message: "Request queued offline. It will sync automatically when network is back.",
+                    },
+                    status: 202,
+                    statusText: "Accepted (offline queue)",
+                    headers: {},
+                    config,
+                });
+            }
+
+            if (error.code === 'ECONNABORTED'){
+                errorToReturn = createError(
+                    ERROR_TYPES.NETWORK,
+                    'Request timed out. Please check your internet connection and try again',
+                    {code: error.code}
+                );
+                errorStore.getState().setError(errorToReturn);
+                return Promise.reject(errorToReturn);
+            }
+            errorToReturn = createError(
+                ERROR_TYPES.NETWORK,
+                'Network error. Please check your internet connection.',
+                { code: error.code }
+            );
+            errorStore.getState().setError(errorToReturn);
+            return Promise.reject(errorToReturn);
+        }
+
+        const {status,data} = error.response;
+        const backendCode = data?.code;
+        const backendMessage = data?.message || data?.error;
+        const backendFieldErrors = data?.fieldErrors;
+
+        //handle different http status codes
+
+        switch (status){
+            case 400:
+                //bad request
+                if(data && typeof data === 'object'){
+                    //checking if its validation error
+
+                    const fieldCount = backendFieldErrors
+                        ? Object.keys(backendFieldErrors).length
+                        : Object.keys(data).length;
+
+                    if((backendCode === ERROR_TYPES.VALIDATION || backendCode === "VALIDATION_ERROR") ||
+                        fieldCount > 1 || (fieldCount === 1 && !data.error && !data.message)){
+                        //validation errors
+
+                        errorToReturn = createError(
+                            ERROR_TYPES.VALIDATION,
+                            backendMessage || 'Please correct the following errors:',
+                            backendFieldErrors || data,
+                            status
+                        );
+                        errorStore.getState().setError(errorToReturn);
+                        return Promise.reject(errorToReturn);
+                    }else if(data.error || data.message){
+                        //business error
+                        errorToReturn = createError(
+                            ERROR_TYPES.BUSINESS,
+                            backendMessage,
+                            null,
+                            status
+                        );
+                        errorStore.getState().setError(errorToReturn);
+                        return Promise.reject(errorToReturn);
+                    }
+
+                }
+
+                errorToReturn = createError(
+                    ERROR_TYPES.BUSINESS,
+                    backendMessage || 'Invalid request. Please check your input data',
+                    data,
+                    status
+                );
+                errorStore.getState().setError(errorToReturn);
+                return Promise.reject(errorToReturn);
+
+
+            case 401:
+                {
+                    const originalRequest = error.config || {};
+                    const requestUrl = originalRequest.url || "";
+                    const isPublicEndpoint =
+                        requestUrl.includes("/subscriptions/public/plans") ||
+                        requestUrl.includes("/trial-requests/captcha") ||
+                        requestUrl.includes("/public/support-email") ||
+                        requestUrl.includes("/trial-requests");
+
+                    if (
+                        !originalRequest._retry &&
+                        !isAuthEndpoint(requestUrl) &&
+                        !isPublicEndpoint
+                    ) {
+                        originalRequest._retry = true;
+
+                        if (isRefreshing) {
+                            return new Promise((resolve, reject) => {
+                                pendingQueue.push({ resolve, reject });
+                            })
+                                .then((token) => {
+                                    originalRequest.headers = originalRequest.headers || {};
+                                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                                    return axiosConfig(originalRequest);
+                                })
+                                .catch((refreshErr) => Promise.reject(refreshErr));
+                        }
+
+                        isRefreshing = true;
+                        try {
+                            const refreshResponse = await refreshClient.post(authApi.REFRESH);
+                            const newToken = refreshResponse?.data?.jwt;
+                            if (!newToken) {
+                                throw new Error("Missing refreshed token");
+                            }
+                            safeStorage.setItem(AUTH_TOKEN_KEY, newToken);
+                            flushPendingQueue(newToken, null);
+                            originalRequest.headers = originalRequest.headers || {};
+                            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                            return axiosConfig(originalRequest);
+                        } catch (refreshErr) {
+                            flushPendingQueue(null, refreshErr);
+                            clearSessionAndRedirect();
+                            errorToReturn = createError(
+                                ERROR_TYPES.AUTHENTICATION,
+                                "Your session has expired. Please log in again",
+                                null,
+                                status
+                            );
+                            errorStore.getState().setError(errorToReturn);
+                            return Promise.reject(errorToReturn);
+                        } finally {
+                            isRefreshing = false;
+                        }
+                    }
+
+                    clearSessionAndRedirect();
+                    errorToReturn = createError(
+                        ERROR_TYPES.AUTHENTICATION,
+                        backendMessage || "Your session has expired. Please log in again",
+                        null,
+                        status
+                    );
+                    errorStore.getState().setError(errorToReturn);
+                    return Promise.reject(errorToReturn);
+                }
+
+
+
+            case 403:
+                // Forbidden authorization error
+                //
+                // if(window.location.pathname !== '/forbidden'){
+                //    window.location.href = '/forbidden'
+                // }
+                let forbiddenMessage = backendMessage || "You don't have permission to perform this action.";
+                if (backendCode === "STORE_INACTIVE") {
+                    forbiddenMessage = "Your store is inactive. Contact Super Admin to reactivate the store.";
+                } else if (backendCode === "BRANCH_INACTIVE") {
+                    forbiddenMessage = "Your branch is inactive. Contact your Store Admin.";
+                } else if (backendCode === "USER_INACTIVE") {
+                    forbiddenMessage = "Your account is inactive. Contact your administrator.";
+                }
+
+                errorToReturn = createError(
+                    ERROR_TYPES.AUTHORIZATION,
+                    forbiddenMessage,
+                    backendCode ? { code: backendCode } : null,
+                    status
+                );
+                errorStore.getState().setError(errorToReturn);
+                return Promise.reject(errorToReturn);
+
+            case 404:
+
+                // // Redirect to not found if not already the
+                // if (window.location.pathname !== '/notfound') {
+                //     window.location.href = '/notfound';
+                // }
+                // Not Found
+                errorToReturn = createError(
+                    ERROR_TYPES.BUSINESS,
+                    backendMessage || 'The requested resource was not found.',
+                    null,
+                    status
+                );
+                errorStore.getState().setError(errorToReturn);
+                return Promise.reject(errorToReturn);
+
+            case 422:
+                // Unprocessable Entity validation errors
+                errorToReturn = createError(
+                    ERROR_TYPES.VALIDATION,
+                    backendMessage || 'Validation failed. Please check your input.',
+                    backendFieldErrors || data,
+                    status
+                );
+                errorStore.getState().setError(errorToReturn);
+                return Promise.reject(errorToReturn);
+
+            case 429:
+                // Too Many Requests
+                errorToReturn = createError(
+                    ERROR_TYPES.BUSINESS,
+                    'Too many requests. Please wait a moment and try again.',
+                    null,
+                    status
+                );
+                errorStore.getState().setError(errorToReturn);
+                return Promise.reject(errorToReturn);
+
+
+            case 500:
+            case 502:
+            case 503:
+            case 504:
+                // if (window.location.pathname !== '/servererror') {
+                //     window.location.href = '/servererror';
+                // }
+                const serverMessage =
+                    (typeof data === "string" && data) ||
+                    backendMessage ||
+                    "Internal server error";
+                errorToReturn = createError(
+                    ERROR_TYPES.SERVER,
+                    serverMessage,
+                    data,
+                    status
+                );
+                errorStore.getState().setError(errorToReturn);
+                return Promise.reject(errorToReturn);
+
+            default:
+                // Other errors
+                // if (window.location.pathname !== '/unknown') {
+                //     window.location.href = '/unknown';
+                // }
+
+                errorToReturn = createError(
+                    ERROR_TYPES.UNKNOWN,
+                    data?.error || `An unexpected error occurred (${status}).`,
+                    data,
+                    status
+                );
+                errorStore.getState().setError(errorToReturn);
+                return Promise.reject(errorToReturn);
+
+        }
+
+
+    }
+
+)
+
+export default axiosConfig
+
+
+
+...base query
+
+
+
+import { create } from "zustand";
+
+/*
+This is the core query store and this will be used by other query stores
+i built it cause i did not know to use REACT QUERY..so wanted to understand it better
+
+this will help in
+
+-Scaling
+-avoid duplicated data
+-avoid race conditions by deduplicating requests per query storeKey
+-response will have tokens so stall responses do not overwrite newone
+-re using data accross screens
+-caching
+-errors
+-loading states
+..
+
+first when i built it did not have selectors..and i was facing any infinty loop problem of re renders..
+so i did some research and came up with a solution
+ */
+
+//creating a store that accepts:
+// extend - this will allow each feature to add its own extensions
+// options - config for debug mode
+export const createQueryStore = (extend, options = {}) =>
+    create((set, get) => {
+
+        //this is for turning debug mode on or off .
+        //if the debug is true the store will log warnings for bad pattens
+        const debug = !!(options && options.debug);
+
+        //the following are closure variables
+
+        //this variable remembers previos results arrays so that React does not re render
+        const __listCache = {};
+
+        //this one will track active api calls to avoid stale responses
+        const __inflight = {};
+
+        //this variable will be used in debugging by tracking how oftern arrays are recreated
+        const __allocCounts = {};
+
+        //this will delete illegal set() inside selectors to avoid re rendering infinty loops
+        let __inSelector = false;
+
+        /*
+        This will wrap zustand set()
+         -what i noticed was if you call set() inside a selector ,React will give an error of maximum update depth exceeded..loop
+         -hence this code wont crash
+         */
+        const setTracked = (...args) => {
+            return set(...args);
+        };
+
+        //initial store
+        return {
+
+            //used to store items by id
+            entities: {},
+
+            //used to map querykey to list of ids
+            queries: {},
+
+            //loading
+            loading: {},
+
+            //error
+            error: {},
+
+            //used for page, number page size,total pages
+            pagination: {},
+
+            //used to store total counts per query key
+            totals: {},
+
+            //CORE HELPERS
+
+            /*
+            this will mark a request as loading
+            will clear old errors
+            will create a unique token for the request
+             */
+            start: (key) => {
+                const token = Symbol(key);
+                __inflight[key] = token;
+                setTracked((s) => ({
+                    loading: { ...s.loading, [key]: true },
+                    error: { ...s.error, [key]: null },
+                }));
+                return token;
+            },
+
+            /*
+            this class is when request succeeds
+            it ignores stale API responses
+            normalizes data
+            it then updates
+             -entities
+             -queries
+             -loading
+             */
+            success: (key, items, token, meta = {}) =>
+                setTracked((s) => {
+
+                    // if a token was provided but it's not the current inflight token, ignore this stale response
+                    if (token && __inflight[key] && __inflight[key] !== token) {
+                        return s;
+                    }
+
+                    const safeItems = Array.isArray(items) ? items : [];
+
+                    // will update the closure list cache for this storeKey to the new list reference
+                    __listCache[key] = safeItems.map((item) => item);
+
+                    // will clear inflight token for this storeKey since we have successfully applied the result
+                    delete __inflight[key];
+
+                    return {
+                        //loading is set to false when succeded
+                        loading: { ...s.loading, [key]: false },
+
+                        //here we only store ids not objects
+                        //it will prevent duplication
+                        //enables reuse
+                        queries: {
+                            ...s.queries,
+                            [key]: safeItems.map((item) => item.id),
+                        },
+
+                        entities: {
+                            ...s.entities,
+                            ...Object.fromEntries(
+                                safeItems.map((item) => [item.id, item])
+                            ),
+                        },
+
+                        totals: {
+                            ...s.totals,
+                            [key]: meta.total ?? safeItems.length,
+                        },
+                    };
+                }),
+
+            // fail also accepts token and only applies if token matches
+            //stops loadinding
+            //stores error
+            // ignores stall response
+            fail: (key, err, token) =>
+                setTracked((s) => {
+                    if (token && __inflight[key] && __inflight[key] !== token) {
+                        return s;
+                    }
+
+                    delete __inflight[key];
+
+                    return {
+                        loading: { ...s.loading, [key]: false },
+                        error: { ...s.error, [key]: err },
+                    };
+                }),
+
+            //invalidation
+
+            //clear evrything
+            clear: () =>
+                setTracked({
+                    entities: {},
+                    queries: {},
+                    loading: {},
+                    error: {},
+                    pagination: {},
+                    totals: {},
+                }),
+
+            //remove one query
+            //used when data is outdated or refetching
+            invalidate: (key) =>
+                setTracked((s) => {
+
+                    // clear closure caches for this key and paginated keys
+                    Object.keys(__listCache).forEach((k) => {
+                        if (k === key || k.startsWith(`${key}_page_`)) {
+                            delete __listCache[k];
+                        }
+                    });
+
+                    delete __inflight[key];
+
+                    const { [key]: _, ...restQueries } = s.queries;
+                    const { [key]: __, ...restLoading } = s.loading;
+                    const { [key]: ___, ...restError } = s.error;
+                    const { [key]: ____, ...restTotals } = s.totals;
+
+                    return {
+                        queries: restQueries,
+                        loading: restLoading,
+                        error: restError,
+                        totals: restTotals,
+                    };
+                }),
+
+            setEntity: (id, entity) =>
+                setTracked((s) => ({
+                    entities: { ...s.entities, [id]: entity },
+                })),
+
+            replaceId: (key, oldId, newId) =>
+                setTracked((s) => ({
+                    queries: {
+                        ...s.queries,
+                        [key]: s.queries[key].map((id) =>
+                            id === oldId ? newId : id
+                        ),
+                    },
+                })),
+
+            setTotals: (key, total) =>
+                setTracked((s) => ({
+                    totals: { ...s.totals, [key]: total },
+                })),
+
+
+            //remove all queris starting with prefix
+            //for bulk refresh
+            invalidatePrefix: (prefix) =>
+                setTracked((s) => {
+                    const filter = (obj) =>
+                        Object.fromEntries(
+                            Object.entries(obj).filter(([k]) => !k.startsWith(prefix))
+                        );
+
+                    Object.keys(__listCache).forEach((k) => {
+                        if (k.startsWith(prefix)) delete __listCache[k];
+                    });
+                    Object.keys(__inflight).forEach((k) => {
+                        if (k.startsWith(prefix)) delete __inflight[k];
+                    });
+
+                    return {
+                        queries: filter(s.queries),
+                        loading: filter(s.loading),
+                        error: filter(s.error),
+                        totals: filter(s.totals),
+                    };
+                }),
+
+            /*
+            optimistically remove an entity from query list
+             */
+            optimisticRemove: (key, id) =>
+                setTracked((s) => {
+                    const ids = s.queries[key];
+                    if (!ids) return s;
+
+                    return {
+                        queries: {
+                            ...s.queries,
+                            [key]: ids.filter((x) => x !== id),
+                        },
+                        totals: {
+                            ...s.totals,
+                            [key]: Math.max((s.totals[key] ?? ids.length) - 1, 0),
+                        },
+                    };
+                }),
+
+            optimisticMove(fromKey, toKey, entity) {
+                setTracked((s) => {
+                    const fromIds = s.queries[fromKey] ?? [];
+                    const toIds = s.queries[toKey] ?? [];
+
+                    return {
+                        queries: {
+                            ...s.queries,
+                            [fromKey]: fromIds.filter((id) => id !== entity.id),
+                            [toKey]: [entity.id, ...toIds],
+                        },
+                        totals: {
+                            ...s.totals,
+                            [fromKey]: Math.max(
+                                (s.totals[fromKey] ?? fromIds.length) - 1,
+                                0
+                            ),
+                            [toKey]: (s.totals[toKey] ?? toIds.length) + 1,
+                        },
+                        entities: {
+                            ...s.entities,
+                            [entity.id]: entity,
+                        },
+                    };
+                });
+            },
+
+            /*
+            rollback helper
+             */
+            restoreQuery: (key, prevIds) =>
+                setTracked((s) => ({
+                    queries: { ...s.queries, [key]: prevIds },
+                    totals: {
+                        ...s.totals,
+                        [key]: prevIds?.length ?? 0,
+                    },
+                })),
+
+            //Selector helpers
+
+            /*
+              -this will convert ids to full objects
+              -prevents unnecessary re renders
+              -it will also refuse same array refrence if data did not change
+             */
+            selectList:
+                (key) =>
+                    (s) => {
+                        __inSelector = true;
+                        try {
+                            const ids = s.queries[key] || [];
+                            const newList = ids.map((id) => s.entities[id]);
+
+                            const cache = __listCache[key];
+                            if (cache && cache.length === newList.length) {
+                                let same = true;
+                                for (let i = 0; i < newList.length; i++) {
+                                    if (cache[i] !== newList[i]) {
+                                        same = false;
+                                        break;
+                                    }
+                                }
+                                if (same) return cache;
+                            }
+
+                            __listCache[key] = newList;
+                            return newList;
+                        } finally {
+                            __inSelector = false;
+                        }
+                    },
+
+            //for loading returns true or false
+            selectLoading: (key) => (s) => !!s.loading[key],
+
+            //returns error messages or null
+            selectError: (key) => (s) => s.error[key],
+
+            selectPagination: (key) => (s) => s.pagination[key],
+            selectById:
+                (id) =>
+                    (s) => s.entities[id] || null,
+
+            selectPage:
+                (key, page = 1, pageSize = 10) =>
+                    (s) => {
+                        const ids = s.queries[key] || [];
+                        const start = (page - 1) * pageSize;
+                        const end = start + pageSize;
+
+                        const list = ids.slice(start, end).map((id) => s.entities[id]);
+
+                        const cacheKey = `${key}_page_${page}_${pageSize}`;
+                        const cache = __listCache[cacheKey];
+
+                        if (cache && cache.length === list.length) {
+                            let same = true;
+                            for (let i = 0; i < list.length; i++) {
+                                if (cache[i] !== list[i]) {
+                                    same = false;
+                                    break;
+                                }
+                            }
+                            if (same) return cache;
+                        }
+
+                        __listCache[cacheKey] = list;
+                        return list;
+                    },
+
+            selectTotal: (key) => (s) => s.totals[key] ?? 0,
+
+            //extend hook
+            ...(extend ? extend(setTracked, get) : {}),
+        };
+    });
+    
+    
+    
+    ...mutation base design
+    
+    
+
+/*
+Core mutation store
+
+ -track loading per mutationkey
+ -track error per mutationkey
+ -prevent duplicate concurrent mutations
+
+ */
+
+import { create } from "zustand";
+
+export const createMutationStore = (extend) =>
+    create((set, get) => {
+        const __inflight = {};
+
+        return {
+            loading: {},
+            error: {},
+
+            start: (key) => {
+                if (__inflight[key]) return false;
+                __inflight[key] = true;
+
+                set((s) => ({
+                    loading: { ...s.loading, [key]: true },
+                    error: { ...s.error, [key]: null },
+                }));
+
+                return true;
+            },
+
+            success: (key) => {
+                delete __inflight[key];
+                set((s) => ({
+                    loading: { ...s.loading, [key]: false },
+                    error: { ...s.error, [key]: null },
+                }));
+            },
+
+            fail: (key, error) => {
+                delete __inflight[key];
+                set((s) => ({
+                    loading: { ...s.loading, [key]: false },
+                    error: { ...s.error, [key]: error },
+                }));
+            },
+
+            clear: (key) =>
+                set((s) => {
+                    const { [key]: _, ...restLoading } = s.loading;
+                    const { [key]: __, ...restError } = s.error;
+                    return { loading: restLoading, error: restError };
+                }),
+
+            ...(extend ? extend(set, get) : {}),
+        };
+    });.....
+    
+    
+    usage query
+    
+    
+    
+    import { createQueryStore } from "../Base/createQueryStore.js";
+import * as employeeService from "../../services/employeeService.js";
+import { storeKey } from "../../utils/StoreKey.js";
+
+const __lastFetchedAt = {};
+const __promises = {};
+const LIST_TTL_MS = 1_000;
+
+const employeeQueryStore = createQueryStore((set, get) => ({
+  fetchEmployeesOfBranch: async (options = {}) => {
+    const key = storeKey({ keyName: "employees", scope: "list", params: {} });
+    const { loading, start, success, fail } = get();
+    const force = !!options.force;
+    const hasCachedQuery = get().queries[key] !== undefined;
+    const isFresh = Date.now() - (__lastFetchedAt[key] || 0) < LIST_TTL_MS;
+    if (__promises[key]) return __promises[key];
+    if (loading[key]) return;
+    if (!force && hasCachedQuery && isFresh) {
+      return Promise.resolve(get().selectList(key)(get()));
+    }
+    const token = start(key);
+    const promise = employeeService
+      .fetchEmployeesOfBranch()
+      .then((res) => {
+        success(key, res, token);
+        __lastFetchedAt[key] = Date.now();
+        delete __promises[key];
+        return res;
+      })
+      .catch((err) => {
+        fail(key, err, token);
+        delete __promises[key];
+        throw err;
+      });
+    __promises[key] = promise;
+    return promise;
+  },
+
+  fetchEmployeesOfStore: async (storeId, options = {}) => {
+    const key = storeKey({ keyName: "employees", scope: "list", params: { storeId } });
+    const { loading, start, success, fail } = get();
+    const force = !!options.force;
+    const hasCachedQuery = get().queries[key] !== undefined;
+    const isFresh = Date.now() - (__lastFetchedAt[key] || 0) < LIST_TTL_MS;
+    if (__promises[key]) return __promises[key];
+    if (loading[key]) return;
+    if (!force && hasCachedQuery && isFresh) {
+      return Promise.resolve(get().selectList(key)(get()));
+    }
+    const token = start(key);
+    const promise = employeeService
+      .fetchEmployeesOfStore(storeId)
+      .then((res) => {
+        success(key, res, token);
+        __lastFetchedAt[key] = Date.now();
+        delete __promises[key];
+        return res;
+      })
+      .catch((err) => {
+        fail(key, err, token);
+        delete __promises[key];
+        throw err;
+      });
+    __promises[key] = promise;
+    return promise;
+  },
+
+  fetchEmployeeById: async (id) => {
+    const key = storeKey({ keyName: "employee", scope: "single", params: { id } });
+    const { loading, start, success, fail } = get();
+    if (loading[key]) return;
+    const token = start(key);
+    try {
+      const res = await employeeService.fetchEmployeeById(id);
+      success(key, [res], token);
+      return res;
+    } catch (err) {
+      fail(key, err, token);
+      throw err;
+    }
+  },
+}));
+
+export default employeeQueryStore;
+
+
+
+
+.....
+
+
+usage of mutation
+
+
+import { createMutationStore } from "../Base/createMutationStore.js";
+import * as employeeService from "../../services/employeeService.js";
+import * as userService from "../../services/userService.js";
+import employeeQueryStore from "../query/employeeQueryStore.js";
+import { storeKey } from "../../utils/StoreKey.js";
+
+const employeeMutationStore = createMutationStore((set, get) => ({
+  createEmployee: async (dto) => {
+    const mutationKey = `employee:create`;
+    const { start, success, fail } = get();
+    if (!start(mutationKey)) return;
+
+    const listKey = storeKey({ keyName: "employees", scope: "list", params: {} });
+    const queryStore = employeeQueryStore.getState();
+    const prev = queryStore.queries[listKey] ?? [];
+
+    try {
+      const created = await employeeService.createEmployee(dto);
+      queryStore.invalidate(listKey);
+      success(mutationKey);
+      return created;
+    } catch (err) {
+      fail(mutationKey, err);
+      throw err;
+    }
+  },
+
+  updateEmployee: async (id, dto) => {
+    const mutationKey = `employee:update:${id}`;
+    const { start, success, fail } = get();
+    if (!start(mutationKey)) return;
+
+    const queryStore = employeeQueryStore.getState();
+    const prev = queryStore.entities[id];
+
+    try {
+      queryStore.setEntity(id, { ...prev, ...dto, __optimistic: true });
+      const updated = await employeeService.updateEmployee(id, dto);
+      queryStore.setEntity(id, updated);
+      success(mutationKey);
+      return updated;
+    } catch (err) {
+      if (prev) queryStore.setEntity(id, prev);
+      fail(mutationKey, err);
+      throw err;
+    }
+  },
+
+  activateEmployee: async (id) => {
+    const mutationKey = `employee:activate:${id}`;
+    const { start, success, fail } = get();
+    if (!start(mutationKey)) return;
+    try {
+      await employeeService.activateEmployee(id);
+      const listKey = storeKey({ keyName: "employees", scope: "list", params: {} });
+      const queryStore = employeeQueryStore.getState();
+      queryStore.invalidate(listKey);
+      success(mutationKey);
+    } catch (err) {
+      fail(mutationKey, err);
+      throw err;
+    }
+  },
+
+  deactivateEmployee: async (id) => {
+    const mutationKey = `employee:deactivate:${id}`;
+    const { start, success, fail } = get();
+    if (!start(mutationKey)) return;
+    try {
+      await employeeService.deactivateEmployee(id);
+      const listKey = storeKey({ keyName: "employees", scope: "list", params: {} });
+      const queryStore = employeeQueryStore.getState();
+      queryStore.invalidate(listKey);
+      success(mutationKey);
+    } catch (err) {
+      fail(mutationKey, err);
+      throw err;
+    }
+  },
+
+  setReadOnly: async (id, enabled) => {
+    const mutationKey = `employee:read-only:${id}`;
+    const { start, success, fail } = get();
+    if (!start(mutationKey)) return;
+    try {
+      await userService.setReadOnly(id, enabled);
+      const listKey = storeKey({ keyName: "employees", scope: "list", params: {} });
+      const queryStore = employeeQueryStore.getState();
+      queryStore.invalidate(listKey);
+      success(mutationKey);
+    } catch (err) {
+      fail(mutationKey, err);
+      throw err;
+    }
+  },
+}));
+
+export default employeeMutationStore;
+
+
+
+
+
+....
+    
+
