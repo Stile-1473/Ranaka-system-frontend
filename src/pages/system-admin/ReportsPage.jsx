@@ -460,7 +460,7 @@ function ReportsPage() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={approvalBreakdown}
-                margin={{ top: 8, right: 8, left: -24, bottom: 0 }}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
               >
                 <CartesianGrid
                   stroke="rgba(148,163,184,0.12)"
@@ -550,7 +550,7 @@ function ReportsPage() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={bottleneckChartData}
-                margin={{ top: 8, right: 8, left: -24, bottom: 0 }}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
               >
                 <CartesianGrid
                   stroke="rgba(148,163,184,0.12)"
@@ -595,7 +595,7 @@ function ReportsPage() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={departmentChartData}
-                margin={{ top: 8, right: 8, left: -24, bottom: 18 }}
+                margin={{ top: 8, right: 8, left: 0, bottom: 18 }}
               >
                 <CartesianGrid
                   stroke="rgba(148,163,184,0.12)"

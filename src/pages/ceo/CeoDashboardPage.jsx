@@ -199,7 +199,7 @@ function CeoDashboardPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
                   data={trendData}
-                  margin={{ top: 8, right: 8, left: -24, bottom: 0 }}
+                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
                 >
                   <XAxis
                     dataKey="label"

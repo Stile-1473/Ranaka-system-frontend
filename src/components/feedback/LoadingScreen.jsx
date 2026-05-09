@@ -10,8 +10,8 @@ function LoadingScreen({ message = "Preparing your workspace..." }) {
           transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
         />
         <div>
-          <p className="text-lg font-semibold text-slate-900">{message}</p>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="text-lg font-semibold text-slate-50">{message}</p>
+          <p className="mt-2 text-sm text-slate-400">
             If the server was resting, this can take a short moment.
           </p>
         </div>

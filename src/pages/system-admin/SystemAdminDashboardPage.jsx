@@ -157,7 +157,7 @@ function SystemAdminDashboardPage() {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+                <LineChart data={trendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="label"
