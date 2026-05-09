@@ -192,7 +192,7 @@ function AdminDashboardPage() {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.95fr] xl:items-start">
         <Card>
           <div>
             <h3 className="panel-title">Recommendation Trend</h3>
@@ -201,7 +201,7 @@ function AdminDashboardPage() {
             </p>
           </div>
 
-          <div className="mt-6 h-80">
+          <div className="mt-6 h-64 xl:h-[25rem]">
             {requestTrendsStatus === "loading" ? (
               <SkeletonBlock variant="chart" />
             ) : trendData.length === 0 ? (
