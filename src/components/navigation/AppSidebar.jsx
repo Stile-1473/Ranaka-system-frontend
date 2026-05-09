@@ -60,7 +60,7 @@ function AppSidebar() {
         }}
         transition={{ duration: 0.28, ease: "easeOut" }}
         className={cn(
-          "fixed inset-y-5 left-4 z-40 flex flex-col overflow-x-hidden rounded-[2rem] border border-white/10 bg-slate-950/46 px-3 py-5 shadow-[0_30px_100px_-46px_rgba(2,6,23,0.98)] backdrop-blur-2xl transition-transform duration-300 lg:translate-x-0",
+          "fixed inset-y-5 left-4 z-40 flex flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/46 px-3 py-5 shadow-[0_30px_100px_-46px_rgba(2,6,23,0.98)] backdrop-blur-2xl transition-transform duration-300 lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-[120%] lg:translate-x-0"
         )}
       >
@@ -90,7 +90,7 @@ function AppSidebar() {
           </div>
         </div>
 
-        <div className="flex-1 space-y-8 overflow-y-auto">
+        <div className="sidebar-scroll min-h-0 flex-1 space-y-8 overflow-y-auto overscroll-contain pr-1">
           {/* Role-specific primary navigation */}
           <div className={cn("space-y-2", !showLabels && "flex flex-col items-center")}>
             {showLabels ? (
@@ -127,7 +127,12 @@ function AppSidebar() {
         </div>
 
         {/* Footer with signed-in user identity */}
-        <div className={cn("mt-6 flex", showLabels ? "justify-start px-1" : "justify-center")}>
+        <div
+          className={cn(
+            "mt-6 flex border-t border-white/8 pt-5",
+            showLabels ? "justify-start px-1" : "justify-center"
+          )}
+        >
           <div
             title={`${currentUser?.firstName || ""} ${currentUser?.lastName || ""}`.trim() || "User"}
             className="flex h-12 w-12 items-center justify-center rounded-[1.15rem] border border-white/10 bg-white/6 text-sm font-semibold text-slate-100 shadow-[0_18px_40px_-26px_rgba(2,6,23,0.9)]"

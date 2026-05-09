@@ -13,24 +13,23 @@ import {
 } from "recharts";
 import { Download, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
-import Card from "../../components/ui/Card";
+import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
 import StatCard from "../../components/dashboard/StatCard";
 import InputField from "../../components/forms/InputField";
 import SelectField from "../../components/forms/SelectField";
-import Badge from "../../components/ui/Badge";
 import { REQUEST_PRIORITIES } from "../../config/constants";
 import { useDepartmentQueryStore } from "../../stores/query/departmentQueryStore";
 import { useReportQueryStore } from "../../stores/query/reportQueryStore";
 import { exportReport } from "../../services/reportService";
+import { formatDate, formatDateTime } from "../../utils/dateFormatters";
 import {
   formatCurrency,
-  formatEnumLabel,
   formatPriority,
   formatRequestStatus,
   formatWorkflowStage,
 } from "../../utils/requestHelpers";
-import { formatDate, formatDateTime } from "../../utils/dateFormatters";
 
 const STATUS_OPTIONS = [
   "DRAFT",
@@ -59,7 +58,32 @@ const EMPTY_FILTERS = {
   overdueOnly: false,
 };
 
+const chartTooltipStyle = {
+  borderRadius: "18px",
+  border: "1px solid rgba(255,255,255,0.08)",
+  backgroundColor: "rgba(2, 6, 23, 0.92)",
+  color: "#f8fafc",
+  boxShadow: "0 24px 70px rgba(2, 6, 23, 0.5)",
+};
+
 const formatDateInput = (date) => new Date(date).toISOString().slice(0, 10);
+
+function SectionBlock({ title, description, action, children }) {
+  return (
+    <Card>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="panel-title">{title}</h3>
+          {description ? (
+            <p className="mt-1 text-sm text-slate-400">{description}</p>
+          ) : null}
+        </div>
+        {action}
+      </div>
+      <div className="mt-6">{children}</div>
+    </Card>
+  );
+}
 
 function ReportsPage() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -152,7 +176,6 @@ function ReportsPage() {
     if (filters.startDate && filters.endDate) {
       loadReports(filters);
     }
-    // We reload whenever the active filter set changes materially.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.startDate, filters.endDate]);
 
@@ -239,13 +262,28 @@ function ReportsPage() {
     loadReports(nextFilters);
   };
 
+  const resetFilters = () => {
+    const today = new Date();
+    const startDate = new Date();
+    startDate.setDate(today.getDate() - 29);
+    const nextFilters = {
+      ...EMPTY_FILTERS,
+      startDate: formatDateInput(startDate),
+      endDate: formatDateInput(today),
+    };
+    setActivePreset("30 Days");
+    setFilters(nextFilters);
+    loadReports(nextFilters);
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Reports</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Faster, clearer reporting for short review periods, operational follow-up, and leadership insight.
+      <div className="page-action-bar">
+        <div className="page-action-copy">
+          <p className="section-title">System Analytics</p>
+          <h2 className="page-action-title">Reports</h2>
+          <p className="page-action-subtitle">
+            Explore operational throughput, approval delays, departmental demand, and overdue risk from one analytics workspace.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -278,7 +316,7 @@ function ReportsPage() {
           ))}
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <InputField
             label="Start date"
             type="date"
@@ -355,7 +393,7 @@ function ReportsPage() {
             ))}
           </SelectField>
           <label className="flex items-end">
-            <span className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+            <span className="glass-control flex h-11 w-full items-center gap-3 rounded-xl px-4 text-sm text-slate-200">
               <input
                 type="checkbox"
                 checked={filters.overdueOnly}
@@ -371,24 +409,9 @@ function ReportsPage() {
           </label>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-5 flex flex-wrap items-center gap-3">
           <Button onClick={() => loadReports()}>Apply Filters</Button>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              const today = new Date();
-              const startDate = new Date();
-              startDate.setDate(today.getDate() - 29);
-              const nextFilters = {
-                ...EMPTY_FILTERS,
-                startDate: formatDateInput(startDate),
-                endDate: formatDateInput(today),
-              };
-              setActivePreset("30 Days");
-              setFilters(nextFilters);
-              loadReports(nextFilters);
-            }}
-          >
+          <Button variant="secondary" onClick={resetFilters}>
             Reset
           </Button>
         </div>
@@ -419,17 +442,11 @@ function ReportsPage() {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">
-                Stage Turnaround
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Average time spent in each approval stage for the selected period.
-              </p>
-            </div>
+      <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr] xl:items-start">
+        <SectionBlock
+          title="Stage Turnaround"
+          description="Average time spent in each approval stage for the selected period."
+          action={
             <Badge variant="neutral">
               {approvalTimesReport?.startDate
                 ? `${formatDate(approvalTimesReport.startDate)} - ${formatDate(
@@ -437,47 +454,42 @@ function ReportsPage() {
                   )}`
                 : "Current range"}
             </Badge>
-          </div>
-
-          <div className="mt-6 h-72">
+          }
+        >
+          <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={approvalBreakdown} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+              <BarChart
+                data={approvalBreakdown}
+                margin={{ top: 8, right: 8, left: -24, bottom: 0 }}
+              >
+                <CartesianGrid
+                  stroke="rgba(148,163,184,0.12)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="name"
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#64748b", fontSize: 12 }}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
                 />
                 <YAxis
                   allowDecimals={false}
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#64748b", fontSize: 12 }}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
                 />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: "10px",
-                    border: "1px solid #e2e8f0",
-                    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
-                  }}
-                />
+                <Tooltip contentStyle={chartTooltipStyle} />
                 <Bar dataKey="hours" radius={[8, 8, 0, 0]} fill="#238b64" />
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </Card>
+        </SectionBlock>
 
-        <Card>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">
-                Overdue Priority Mix
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Which priority levels make up the current overdue workload.
-              </p>
-            </div>
+        <SectionBlock
+          title="Overdue Priority Mix"
+          description="Which priority levels make up the current overdue workload."
+          action={
             <Button
               variant="secondary"
               className="gap-2"
@@ -486,11 +498,11 @@ function ReportsPage() {
               <Download className="h-4 w-4" />
               Export
             </Button>
-          </div>
-
-          <div className="mt-6 h-72">
+          }
+        >
+          <div className="h-72">
             {priorityMixData.length === 0 ? (
-              <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+              <div className="flex h-full items-center justify-center rounded-[1.25rem] border border-dashed border-white/10 bg-white/[0.03] text-sm text-slate-400">
                 No overdue priority mix available for the current filters.
               </div>
             ) : (
@@ -511,31 +523,19 @@ function ReportsPage() {
                       />
                     ))}
                   </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: "10px",
-                      border: "1px solid #e2e8f0",
-                      boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
-                    }}
-                  />
+                  <Tooltip contentStyle={chartTooltipStyle} />
                 </PieChart>
               </ResponsiveContainer>
             )}
           </div>
-        </Card>
+        </SectionBlock>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <Card>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">
-                Workflow Bottlenecks
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Pending and overdue counts by approval stage.
-              </p>
-            </div>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <SectionBlock
+          title="Workflow Bottlenecks"
+          description="Pending and overdue counts by approval stage."
+          action={
             <Button
               variant="secondary"
               className="gap-2"
@@ -544,48 +544,43 @@ function ReportsPage() {
               <Download className="h-4 w-4" />
               Export
             </Button>
-          </div>
-
-          <div className="mt-6 h-80">
+          }
+        >
+          <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={bottleneckChartData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+              <BarChart
+                data={bottleneckChartData}
+                margin={{ top: 8, right: 8, left: -24, bottom: 0 }}
+              >
+                <CartesianGrid
+                  stroke="rgba(148,163,184,0.12)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="stage"
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#64748b", fontSize: 12 }}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
                 />
                 <YAxis
                   allowDecimals={false}
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#64748b", fontSize: 12 }}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
                 />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: "10px",
-                    border: "1px solid #e2e8f0",
-                    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
-                  }}
-                />
+                <Tooltip contentStyle={chartTooltipStyle} />
                 <Bar dataKey="pending" name="Pending" fill="#238b64" radius={[8, 8, 0, 0]} />
                 <Bar dataKey="overdue" name="Overdue" fill="#dc2626" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </Card>
+        </SectionBlock>
 
-        <Card>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">
-                Department Volume
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Request volume and completed throughput by department.
-              </p>
-            </div>
+        <SectionBlock
+          title="Department Volume"
+          description="Request volume and completed throughput by department."
+          action={
             <Button
               variant="secondary"
               className="gap-2"
@@ -594,20 +589,24 @@ function ReportsPage() {
               <Download className="h-4 w-4" />
               Export
             </Button>
-          </div>
-
-          <div className="mt-6 h-80">
+          }
+        >
+          <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={departmentChartData}
                 margin={{ top: 8, right: 8, left: -24, bottom: 18 }}
               >
-                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid
+                  stroke="rgba(148,163,184,0.12)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="name"
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#64748b", fontSize: 12 }}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
                   interval={0}
                   angle={-12}
                   textAnchor="end"
@@ -617,56 +616,44 @@ function ReportsPage() {
                   allowDecimals={false}
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#64748b", fontSize: 12 }}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
                 />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: "10px",
-                    border: "1px solid #e2e8f0",
-                    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
-                  }}
-                />
+                <Tooltip contentStyle={chartTooltipStyle} />
                 <Bar dataKey="requests" name="Requests" fill="#0f172a" radius={[8, 8, 0, 0]} />
                 <Bar dataKey="completed" name="Completed" fill="#238b64" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </Card>
+        </SectionBlock>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card>
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">
-              Top Departments
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Fast, readable operational ranking for the current filter set.
-            </p>
-          </div>
-
-          <div className="mt-6 space-y-3">
+        <SectionBlock
+          title="Top Departments"
+          description="Fast, readable operational ranking for the current filter set."
+        >
+          <div className="space-y-3">
             {(departmentUsageReport || []).slice(0, 6).map((department) => (
               <div
                 key={department.departmentId}
-                className="rounded-lg border border-slate-200 px-4 py-4"
+                className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] px-4 py-4"
               >
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">
+                    <p className="text-sm font-semibold text-slate-50">
                       {department.departmentName}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-slate-400">
                       {department.completedRequests ?? 0} completed,{" "}
                       {department.returnedRequests ?? 0} returned,{" "}
                       {department.rejectedRequests ?? 0} rejected
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-900">
+                    <p className="text-sm font-semibold text-slate-50">
                       {department.totalRequests ?? 0}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-slate-400">
                       {formatCurrency(department.totalEstimatedCost)}
                     </p>
                   </div>
@@ -674,57 +661,49 @@ function ReportsPage() {
               </div>
             ))}
           </div>
-        </Card>
+        </SectionBlock>
 
-        <Card>
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">
-              Overdue Request List
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              A short tactical list for immediate follow-up.
-            </p>
-          </div>
-
-          <div className="mt-6">
-            {overdueRequestsReportStatus === "loading" ? (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-500">
-                Loading overdue requests...
-              </div>
-            ) : overdueRequestsReport.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
-                No overdue requests for the current filter set.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {overdueRequestsReport.slice(0, 6).map((request) => (
-                  <div
-                    key={request.requestId}
-                    className="rounded-lg border border-slate-200 px-4 py-4"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="warning">
-                        {formatWorkflowStage(request.currentStage)}
-                      </Badge>
-                      <Badge variant="danger">
-                        {formatPriority(request.priority)}
-                      </Badge>
-                    </div>
-                    <p className="mt-3 text-sm font-semibold text-slate-900">
-                      {request.title}
-                    </p>
-                    <div className="mt-2 grid gap-2 text-xs text-slate-500">
-                      <span>{request.departmentName}</span>
-                      <span>{request.requesterName}</span>
-                      <span>Required by {formatDate(request.requiredByDate)}</span>
-                      <span>Overdue since {formatDateTime(request.overdueAt)}</span>
-                    </div>
+        <SectionBlock
+          title="Overdue Request List"
+          description="A short tactical list for immediate follow-up."
+        >
+          {overdueRequestsReportStatus === "loading" ? (
+            <div className="rounded-[1.25rem] border border-white/8 bg-white/[0.03] px-4 py-8 text-sm text-slate-400">
+              Loading overdue requests...
+            </div>
+          ) : overdueRequestsReport.length === 0 ? (
+            <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-white/[0.03] px-4 py-8 text-sm text-slate-400">
+              No overdue requests for the current filter set.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {overdueRequestsReport.slice(0, 6).map((request) => (
+                <div
+                  key={request.requestId}
+                  className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] px-4 py-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="warning">
+                      {formatWorkflowStage(request.currentStage)}
+                    </Badge>
+                    <Badge variant="danger">
+                      {formatPriority(request.priority)}
+                    </Badge>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
+                  <p className="mt-3 text-sm font-semibold text-slate-50">
+                    {request.title}
+                  </p>
+                  <div className="mt-2 grid gap-2 text-xs text-slate-400">
+                    <span>{request.departmentName}</span>
+                    <span>{request.requesterName}</span>
+                    <span>Required by {formatDate(request.requiredByDate)}</span>
+                    <span>Overdue since {formatDateTime(request.overdueAt)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionBlock>
       </div>
     </div>
   );

@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import Card from "../../components/ui/Card";
-import Button from "../../components/ui/Button";
-import InputField from "../../components/forms/InputField";
 import Badge from "../../components/ui/Badge";
-import { useSettingsQueryStore } from "../../stores/query/settingsQueryStore";
+import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
+import StatCard from "../../components/dashboard/StatCard";
+import InputField from "../../components/forms/InputField";
 import { useSettingsMutationStore } from "../../stores/mutation/settingsMutationStore";
+import { useSettingsQueryStore } from "../../stores/query/settingsQueryStore";
 
 const EMPTY_SLA = {
   adminSlaHours: "",
@@ -20,6 +21,35 @@ const EMPTY_PRIORITY = {
   mediumSlaHours: "",
   lowSlaHours: "",
 };
+
+function SectionBlock({ title, description, badge, children }) {
+  return (
+    <Card>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="panel-title">{title}</h3>
+          {description ? (
+            <p className="mt-1 text-sm text-slate-400">{description}</p>
+          ) : null}
+        </div>
+        {badge}
+      </div>
+      <div className="mt-6">{children}</div>
+    </Card>
+  );
+}
+
+function PolicyMetric({ label, value, helper }) {
+  return (
+    <div className="rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+        {label}
+      </p>
+      <p className="mt-2 text-sm font-semibold text-slate-100">{value}</p>
+      {helper ? <p className="mt-1 text-xs text-slate-400">{helper}</p> : null}
+    </div>
+  );
+}
 
 function SettingsPage() {
   const [slaValues, setSlaValues] = useState(EMPTY_SLA);
@@ -121,32 +151,54 @@ function SettingsPage() {
     }
   };
 
+  const stageCount = useMemo(
+    () => (workflowSettings?.stages || []).length,
+    [workflowSettings]
+  );
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-slate-900">
-          Workflow Settings
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Control how quickly requests are expected to move and how urgency is interpreted.
-        </p>
+      <div className="page-action-bar">
+        <div className="page-action-copy">
+          <p className="section-title">Workflow Control</p>
+          <h2 className="page-action-title">Workflow Settings</h2>
+          <p className="page-action-subtitle">
+            Control expected approval timing, reminder behavior, and the urgency rules that shape how requests move through the system.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Admin SLA"
+          value={slaSettings?.adminSlaHours ?? "--"}
+          helper="Hours allowed for admin review"
+        />
+        <StatCard
+          label="GM SLA"
+          value={slaSettings?.gmSlaHours ?? "--"}
+          helper="Hours allowed for GM approval"
+        />
+        <StatCard
+          label="CEO SLA"
+          value={slaSettings?.ceoSlaHours ?? "--"}
+          helper="Hours allowed for final authorization"
+        />
+        <StatCard
+          label="Reminder"
+          value={slaSettings?.reminderHoursBeforeBreach ?? "--"}
+          tone="amber"
+          helper="Hours before breach reminder fires"
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">
-                SLA Settings
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Define the expected time limits for each approval stage.
-              </p>
-            </div>
-            <Badge variant="warning">Hours</Badge>
-          </div>
-
-          <form className="mt-6 space-y-4" onSubmit={handleSaveSla}>
+        <SectionBlock
+          title="SLA Settings"
+          description="Define the expected time limits for each approval stage and when reminders should fire before a breach."
+          badge={<Badge variant="warning">Hours</Badge>}
+        >
+          <form className="space-y-4" onSubmit={handleSaveSla}>
             <div className="grid gap-4 sm:grid-cols-2">
               <InputField
                 label="Admin SLA"
@@ -198,26 +250,20 @@ function SettingsPage() {
               />
             </div>
 
-            <Button type="submit" disabled={updateSlaStatus === "loading"}>
-              {updateSlaStatus === "loading" ? "Saving..." : "Save SLA Settings"}
-            </Button>
-          </form>
-        </Card>
-
-        <Card>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">
-                Priority Settings
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Define the urgency targets used to classify priority levels.
-              </p>
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Button type="submit" disabled={updateSlaStatus === "loading"}>
+                {updateSlaStatus === "loading" ? "Saving..." : "Save SLA Settings"}
+              </Button>
             </div>
-            <Badge variant="neutral">Priority</Badge>
-          </div>
+          </form>
+        </SectionBlock>
 
-          <form className="mt-6 space-y-4" onSubmit={handleSavePriority}>
+        <SectionBlock
+          title="Priority Settings"
+          description="Set the urgency thresholds that determine how long each priority level is allowed to remain in the workflow."
+          badge={<Badge variant="neutral">Priority</Badge>}
+        >
+          <form className="space-y-4" onSubmit={handleSavePriority}>
             <div className="grid gap-4 sm:grid-cols-2">
               <InputField
                 label="Critical"
@@ -269,53 +315,55 @@ function SettingsPage() {
               />
             </div>
 
-            <Button type="submit" disabled={updatePriorityStatus === "loading"}>
-              {updatePriorityStatus === "loading"
-                ? "Saving..."
-                : "Save Priority Settings"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Button type="submit" disabled={updatePriorityStatus === "loading"}>
+                {updatePriorityStatus === "loading"
+                  ? "Saving..."
+                  : "Save Priority Settings"}
+              </Button>
+            </div>
           </form>
-        </Card>
+        </SectionBlock>
       </div>
 
-      <Card>
-        <div>
-          <h3 className="text-lg font-semibold text-slate-900">
-            Workflow Policy
-          </h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Version 1 keeps the approval route fixed to protect governance and traceability.
-          </p>
+      <SectionBlock
+        title="Workflow Policy"
+        description="The approval route stays fixed to protect governance, traceability, and clear ownership across the platform."
+      >
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <PolicyMetric
+            label="Stage Count"
+            value={stageCount || "--"}
+            helper="Approval stages currently configured"
+          />
+          <PolicyMetric
+            label="Stage Skipping"
+            value={workflowSettings?.stageSkippingAllowed ? "Allowed" : "Not allowed"}
+            helper="Whether requests can bypass approval stages"
+          />
+          <PolicyMetric
+            label="Final Status"
+            value={workflowSettings?.finalStatus?.replaceAll("_", " ") || "Completed"}
+            helper="Status applied after final authorization"
+          />
+          <PolicyMetric
+            label="Reminder Mode"
+            value="Pre-breach"
+            helper="Notifications are sent before SLA expiry"
+          />
         </div>
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
-          <div className="rounded-lg border border-slate-200 px-4 py-4">
-            <p className="text-sm font-medium text-slate-700">Stage order</p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {(workflowSettings?.stages || []).map((stage) => (
-                <Badge key={stage} variant="neutral">
-                  {stage.replaceAll("_", " ")}
-                </Badge>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="rounded-lg border border-slate-200 px-4 py-4">
-              <p className="text-sm text-slate-500">Stage skipping</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">
-                {workflowSettings?.stageSkippingAllowed ? "Allowed" : "Not allowed"}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-200 px-4 py-4">
-              <p className="text-sm text-slate-500">Final status</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">
-                {workflowSettings?.finalStatus?.replaceAll("_", " ") || "Completed"}
-              </p>
-            </div>
+        <div className="mt-6 rounded-[1.2rem] border border-white/10 bg-white/[0.03] px-4 py-4">
+          <p className="text-sm font-medium text-slate-200">Stage order</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {(workflowSettings?.stages || []).map((stage) => (
+              <Badge key={stage} variant="neutral">
+                {stage.replaceAll("_", " ")}
+              </Badge>
+            ))}
           </div>
         </div>
-      </Card>
+      </SectionBlock>
     </div>
   );
 }
