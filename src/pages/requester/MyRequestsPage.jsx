@@ -280,11 +280,11 @@ function MyRequestsPage() {
                         <div className="min-w-0">
                           <Link
                             to={`/requests/${request.id}`}
-                            className="truncate text-sm font-semibold text-slate-50 transition hover:text-emerald-300"
+                            className="block max-w-full break-words pr-3 text-sm font-semibold leading-6 text-slate-50 transition hover:text-emerald-300"
                           >
                             {request.title}
                           </Link>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                          <div className="mt-2 flex flex-wrap items-center gap-2 pr-3 text-xs text-slate-400">
                             <span>{request.departmentName || "No department"}</span>
                             <span className="text-slate-600">•</span>
                             <span>Required {formatDate(request.requiredByDate)}</span>
