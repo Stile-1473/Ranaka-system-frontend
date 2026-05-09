@@ -136,15 +136,6 @@ function LoginPage() {
               {loginError}
             </div>
           ) : null}
-
-          <div className="mt-8 border-t border-white/10 pt-5 text-center">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-              Demo Access
-            </p>
-            <p className="mt-3 text-sm text-slate-300">
-              requester1@ranaka.org / Ranaka@123
-            </p>
-          </div>
         </Card>
       </motion.div>
     </div>
