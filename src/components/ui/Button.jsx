@@ -3,10 +3,10 @@ import { cn } from "../../utils/cn";
 
 const buttonVariants = {
   primary:
-    "bg-brand-600 text-white shadow-lg shadow-brand-600/20 hover:bg-brand-700",
+    "border border-emerald-400/20 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-[0_16px_40px_-24px_rgba(34,197,94,0.8)] hover:from-emerald-400 hover:to-emerald-500",
   secondary:
-    "border border-slate-200 bg-white text-slate-700 hover:border-brand-200 hover:text-brand-700",
-  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+    "border border-white/10 bg-white/6 text-slate-200 shadow-[0_16px_40px_-24px_rgba(2,6,23,0.9)] backdrop-blur-xl hover:bg-white/10 hover:text-white",
+  ghost: "text-slate-300 hover:bg-white/8 hover:text-white",
 };
 
 const Button = forwardRef(
@@ -22,7 +22,7 @@ const Button = forwardRef(
     ref
   ) => {
     const buttonClassName = cn(
-      "inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition duration-200 disabled:cursor-not-allowed disabled:opacity-60",
+      "inline-flex items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold transition duration-200 disabled:cursor-not-allowed disabled:opacity-60",
       buttonVariants[variant],
       className
     );

@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import { ClipboardCheck, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
 import StatCard from "../../components/dashboard/StatCard";
 import RequestPriorityBadge from "../../components/requests/RequestPriorityBadge";
 import RequestStatusBadge from "../../components/requests/RequestStatusBadge";
+import EmptyState from "../../components/feedback/EmptyState";
+import SkeletonBlock from "../../components/feedback/SkeletonBlock";
+import RequestQueueTable from "../../components/requests/RequestQueueTable";
 import { useRequestQueryStore } from "../../stores/query/requestQueryStore";
 import {
   formatCurrency,
@@ -95,7 +99,7 @@ function PendingAuthorizationsPage() {
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Search by title, requester, or department"
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-400 focus:ring-4 focus:ring-brand-100 lg:max-w-md"
+            className="glass-control w-full rounded-xl px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100/80 lg:max-w-md"
           />
           <div className="flex flex-wrap items-center gap-3">
             <Button
@@ -131,11 +135,7 @@ function PendingAuthorizationsPage() {
       </Card>
 
       {pendingQueueStatus === "loading" ? (
-        <Card>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-10 text-sm text-slate-500">
-            Loading CEO queue...
-          </div>
-        </Card>
+        <SkeletonBlock rows={5} />
       ) : pendingQueueError ? (
         <Card>
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-10 text-sm text-rose-700">
@@ -143,57 +143,17 @@ function PendingAuthorizationsPage() {
           </div>
         </Card>
       ) : filteredQueue.length === 0 ? (
-        <Card>
-          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-sm text-slate-500">
-            No requests match the current CEO filters.
-          </div>
-        </Card>
+        <EmptyState
+          icon={activeFilter === "all" ? ClipboardCheck : Search}
+          title="No requests found"
+          description="No requests match the current CEO filters."
+        />
       ) : (
-        <Card className="overflow-hidden p-0">
-          <div className="divide-y divide-slate-200">
-            {filteredQueue.map((request) => (
-              <Link
-                key={request.id}
-                to={`/ceo/authorizations/${request.id}`}
-                className="block px-5 py-4 transition hover:bg-slate-50"
-              >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-900">
-                      {request.title}
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <RequestStatusBadge
-                        status={request.status}
-                        isOverdue={request.isOverdue}
-                      />
-                      <RequestPriorityBadge priority={request.priority} />
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
-                      <span>{request.requesterName}</span>
-                      <span>{request.departmentName}</span>
-                      <span>{formatWorkflowStage(request.currentStage)}</span>
-                      <span>Required {formatDate(request.requiredByDate)}</span>
-                    </div>
-                  </div>
-                  <div className="text-sm lg:text-right">
-                    <p className="font-semibold text-slate-900">
-                      {formatCurrency(request.estimatedCost)}
-                    </p>
-                    <p className="mt-1 text-slate-500">
-                      {request.submittedAt
-                        ? `Submitted ${formatDateTime(request.submittedAt)}`
-                        : `Created ${formatDateTime(request.createdAt)}`}
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-brand-700">
-                      Review authorization
-                    </p>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </Card>
+        <RequestQueueTable
+          requests={filteredQueue}
+          toRequestPath={(request) => `/ceo/authorizations/${request.id}`}
+          actionLabel="Authorize"
+        />
       )}
     </div>
   );

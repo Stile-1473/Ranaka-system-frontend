@@ -2,6 +2,7 @@ import { Bell, LogOut, Menu, UserCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Button from "../ui/Button";
+import AppCommandSearch from "./AppCommandSearch";
 import { useAuth } from "../../hooks/useAuth";
 import { useNotificationQueryStore } from "../../stores/query/notificationQueryStore";
 import { useUiStore } from "../../stores/base/createUiStore";
@@ -12,8 +13,6 @@ function AppHeader({ title, subtitle }) {
   const { currentUser, logout } = useAuth();
   const unreadCount = useNotificationQueryStore((state) => state.unreadCount);
   const openSidebar = useUiStore((state) => state.openSidebar);
-  const initials = `${currentUser?.firstName?.[0] || ""}${currentUser?.lastName?.[0] || ""}`.trim();
-
   const handleLogout = () => {
     logout();
     toast.success("Signed out successfully");
@@ -21,45 +20,33 @@ function AppHeader({ title, subtitle }) {
   };
 
   return (
-    <header className="sticky top-4 z-20 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.28)]">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-4">
-        <button
-          type="button"
-          onClick={openSidebar}
-          className="rounded-lg border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 lg:hidden"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-        <div className="min-w-0">
-          <p className="truncate text-[1.35rem] font-semibold tracking-[-0.02em] text-slate-900">
-            {title}
-          </p>
-          <p className="mt-1 truncate text-sm text-slate-500">{subtitle}</p>
-        </div>
-      </div>
-
-        <div className="flex items-center gap-2">
-          <div className="hidden items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 xl:flex">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
-              {initials || "U"}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-900">
-                {currentUser?.firstName} {currentUser?.lastName}
-              </p>
-              <p className="truncate text-xs text-slate-500">
-                {currentUser?.role?.replaceAll("_", " ")}
-              </p>
-            </div>
+    <header className="sticky top-4 z-20 rounded-[1.35rem] border border-white/10 bg-slate-950/40 px-4 py-3.5 shadow-[0_22px_70px_-42px_rgba(2,6,23,0.92)] backdrop-blur-2xl">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={openSidebar}
+            className="glass-control rounded-full p-2.5 text-slate-300 transition hover:bg-white/10 hover:text-slate-50 lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="min-w-0">
+            <p className="truncate text-lg font-semibold text-slate-50">{title}</p>
+            {subtitle ? (
+              <p className="hidden truncate text-xs text-slate-500 xl:block">{subtitle}</p>
+            ) : null}
           </div>
+        </div>
+
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+          <AppCommandSearch />
 
           <Link
             to="/notifications"
-            className={`relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border transition ${
+            className={`relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-xl transition ${
               location.pathname === "/notifications"
-                ? "border-slate-300 bg-slate-100 text-slate-900"
-                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                ? "border-emerald-400/35 bg-emerald-500/16 text-emerald-300 shadow-[0_0_22px_rgba(34,197,94,0.22)]"
+                : "border-white/10 bg-white/6 text-slate-300 hover:bg-white/10 hover:text-slate-50"
             }`}
           >
             <Bell className="h-4 w-4" />
@@ -67,8 +54,8 @@ function AppHeader({ title, subtitle }) {
             <span
               className={`absolute -right-1.5 -top-1.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold ${
                 unreadCount > 0
-                  ? "bg-amber-500 text-white"
-                  : "bg-slate-200 text-slate-600"
+                  ? "bg-emerald-500 text-white"
+                  : "bg-slate-700 text-slate-300"
               }`}
             >
               {unreadCount}
@@ -77,10 +64,10 @@ function AppHeader({ title, subtitle }) {
 
           <Link
             to="/profile"
-            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border transition ${
+            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-xl transition ${
               location.pathname === "/profile"
-                ? "border-slate-300 bg-slate-100 text-slate-900"
-                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                ? "border-emerald-400/35 bg-emerald-500/16 text-emerald-300 shadow-[0_0_22px_rgba(34,197,94,0.22)]"
+                : "border-white/10 bg-white/6 text-slate-300 hover:bg-white/10 hover:text-slate-50"
             }`}
           >
             <UserCircle2 className="h-4 w-4" />
@@ -89,7 +76,7 @@ function AppHeader({ title, subtitle }) {
 
           <Button
             variant="secondary"
-            className="gap-2 border-rose-200 px-3 py-2 text-rose-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800"
+            className="gap-2 border-white/10 bg-white/6 px-3 py-2 text-slate-300 hover:bg-rose-500/14 hover:text-rose-100"
             onClick={handleLogout}
           >
             <LogOut className="h-4 w-4" />

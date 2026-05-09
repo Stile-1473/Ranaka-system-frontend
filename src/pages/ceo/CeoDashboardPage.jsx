@@ -12,12 +12,11 @@ import {
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
 import StatCard from "../../components/dashboard/StatCard";
-import RequestPriorityBadge from "../../components/requests/RequestPriorityBadge";
-import RequestStatusBadge from "../../components/requests/RequestStatusBadge";
+import SkeletonBlock from "../../components/feedback/SkeletonBlock";
+import RequestQueueTable from "../../components/requests/RequestQueueTable";
 import { useDashboardQueryStore } from "../../stores/query/dashboardQueryStore";
 import { useRequestQueryStore } from "../../stores/query/requestQueryStore";
-import { formatCurrency, formatWorkflowStage } from "../../utils/requestHelpers";
-import { formatDate, formatDateTime } from "../../utils/dateFormatters";
+import { formatDate } from "../../utils/dateFormatters";
 
 const mapTrendData = (trends) =>
   (Array.isArray(trends) ? trends : []).map((trend) => ({
@@ -64,11 +63,12 @@ function CeoDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-900">CEO Dashboard</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Review final authorizations, prioritise critical items, and complete the approval chain.
+      <div className="page-action-bar">
+        <div className="page-action-copy">
+          <p className="section-title">Executive Decisions</p>
+          <h2 className="page-action-title">Finalize high-value requests with focused approval visibility.</h2>
+          <p className="page-action-subtitle">
+            Review critical authorizations, watch overdue items, and complete the chain with minimal visual noise.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -106,8 +106,8 @@ function CeoDashboardPage() {
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Authorization Trend</h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <h3 className="panel-title">Authorization Trend</h3>
+            <p className="mt-1 text-sm text-slate-400">
               Submitted, returned, and rejected requests over the last 30 days.
             </p>
           </div>
@@ -115,48 +115,48 @@ function CeoDashboardPage() {
 
         <div className="mt-6 h-80">
           {requestTrendsStatus === "loading" ? (
-            <div className="flex h-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm text-slate-500">
-              Loading trend data...
-            </div>
+            <SkeletonBlock variant="chart" />
           ) : trendData.length === 0 ? (
-            <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 text-sm text-slate-500">
+            <div className="flex h-full items-center justify-center rounded-[1.25rem] border border-dashed border-white/12 bg-white/5 px-4 text-sm text-slate-400">
               No trend data available yet.
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trendData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="label"
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#64748b", fontSize: 12 }}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
                 />
                 <YAxis
                   allowDecimals={false}
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#64748b", fontSize: 12 }}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
                 />
                 <Tooltip
                   contentStyle={{
-                    borderRadius: "10px",
-                    border: "1px solid #e2e8f0",
-                    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
+                    borderRadius: "18px",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    backgroundColor: "rgba(2, 6, 23, 0.92)",
+                    color: "#f8fafc",
+                    boxShadow: "0 24px 70px rgba(2, 6, 23, 0.5)",
                   }}
                   labelFormatter={(label, payload) => {
                     const point = payload?.[0]?.payload;
                     return point?.date ? formatDate(point.date) : label;
                   }}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="submittedCount"
-                  name="Submitted"
-                  stroke="#238b64"
-                  strokeWidth={2}
-                  dot={false}
-                />
+                  <Line
+                    type="monotone"
+                    dataKey="submittedCount"
+                    name="Submitted"
+                    stroke="#22c55e"
+                    strokeWidth={2}
+                    dot={false}
+                  />
                 <Line
                   type="monotone"
                   dataKey="returnedCount"
@@ -182,8 +182,8 @@ function CeoDashboardPage() {
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Authorization Queue</h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <h3 className="panel-title">Authorization Queue</h3>
+            <p className="mt-1 text-sm text-slate-400">
               Latest requests waiting for executive authorization.
             </p>
           </div>
@@ -194,77 +194,17 @@ function CeoDashboardPage() {
 
         <div className="mt-6">
           {pendingQueueStatus === "loading" ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-500">
-              Loading CEO queue...
-            </div>
+            <SkeletonBlock rows={3} />
           ) : recentQueue.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
+            <div className="rounded-[1.25rem] border border-dashed border-white/12 bg-white/5 px-4 py-8 text-sm text-slate-400">
               Nothing is waiting for CEO authorization right now.
             </div>
           ) : (
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-              <div className="hidden grid-cols-[minmax(0,1.6fr)_0.9fr_0.9fr_0.9fr_0.9fr] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 lg:grid">
-                <span>Request</span>
-                <span>Requester</span>
-                <span>Due Date</span>
-                <span>Amount</span>
-                <span className="text-right">Action</span>
-              </div>
-
-              <div className="divide-y divide-slate-200">
-                {recentQueue.map((request) => (
-                  <Link
-                    key={request.id}
-                    to={`/ceo/authorizations/${request.id}`}
-                    className="block px-4 py-4 transition hover:bg-slate-50"
-                  >
-                    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.6fr)_0.9fr_0.9fr_0.9fr_0.9fr] lg:items-center">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">
-                          {request.title}
-                        </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <RequestStatusBadge
-                            status={request.status}
-                            isOverdue={request.isOverdue}
-                          />
-                          <RequestPriorityBadge priority={request.priority} />
-                          <span className="text-xs text-slate-500">
-                            {request.departmentName}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="text-sm text-slate-600">
-                        {request.requesterName}
-                      </div>
-
-                      <div className="text-sm text-slate-600">
-                        <div>{formatDate(request.requiredByDate)}</div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {formatWorkflowStage(request.currentStage)}
-                        </div>
-                      </div>
-
-                      <div className="text-sm text-slate-900">
-                        <div className="font-semibold">
-                          {formatCurrency(request.estimatedCost)}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {request.submittedAt
-                            ? formatDateTime(request.submittedAt)
-                            : formatDateTime(request.createdAt)}
-                        </div>
-                      </div>
-
-                      <div className="text-sm font-medium text-brand-700 lg:text-right">
-                        Review
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
+            <RequestQueueTable
+              requests={recentQueue}
+              toRequestPath={(request) => `/ceo/authorizations/${request.id}`}
+              actionLabel="Review"
+            />
           )}
         </div>
       </Card>

@@ -58,8 +58,9 @@ function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white px-6 py-12">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(35,139,100,0.08),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(245,158,11,0.08),transparent_24%)]" />
+    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto bg-slate-950 px-6 py-10">
+      <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(2,6,23,0.94),rgba(2,6,23,0.74)_38%,rgba(2,6,23,0.9)),var(--app-background-image)] bg-cover bg-center" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(34,197,94,0.22),transparent_28%),radial-gradient(circle_at_84%_78%,rgba(22,163,74,0.16),transparent_24%)]" />
 
       <motion.div
         initial={{ opacity: 0, y: 18 }}
@@ -68,16 +69,16 @@ function LoginPage() {
         className="relative z-10 w-full max-w-md"
       >
         <Card className="p-8 lg:p-10">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/20">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-500/12 text-emerald-300 shadow-[0_0_30px_rgba(34,197,94,0.2)]">
             <ShieldCheck className="h-6 w-6" />
           </div>
 
           <div className="mt-6 text-center">
             <p className="section-title">Ranaka</p>
-            <h1 className="mt-4 text-3xl font-semibold text-slate-950">
+            <h2 className="mt-4 text-3xl font-semibold text-slate-50">
               Sign in
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-slate-500">
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
               Access the procurement workflow system with your work account.
             </p>
           </div>
@@ -92,18 +93,18 @@ function LoginPage() {
               {...register("email")}
             />
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-semibold text-slate-700">Password</span>
+              <span className="text-sm font-semibold text-slate-200">Password</span>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
                   placeholder="Password@123"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 pr-12 text-sm text-slate-900 outline-none transition focus:border-brand-400 focus:ring-4 focus:ring-brand-100"
+                  className="w-full rounded-[1.05rem] border border-white/10 bg-white/6 px-4 py-3 pr-12 text-sm text-slate-50 shadow-[0_16px_40px_-30px_rgba(2,6,23,1)] outline-none backdrop-blur-xl transition placeholder:text-slate-500 focus:border-emerald-400/35 focus:bg-white/8 focus:ring-4 focus:ring-emerald-500/10"
                   {...register("password")}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((value) => !value)}
-                  className="absolute inset-y-0 right-0 flex items-center px-4 text-slate-400 transition hover:text-brand-700"
+                  className="absolute inset-y-0 right-0 flex items-center px-4 text-slate-500 transition hover:text-emerald-300"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
@@ -114,7 +115,7 @@ function LoginPage() {
                 </button>
               </div>
               {errors.password?.message ? (
-                <span className="text-xs text-rose-600">
+                <span className="text-xs text-rose-300">
                   {errors.password.message}
                 </span>
               ) : null}
@@ -131,16 +132,16 @@ function LoginPage() {
 
           {/* Inline backend or auth-layer error feedback */}
           {loginError ? (
-            <div className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <div className="mt-4 rounded-[1.05rem] border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
               {loginError}
             </div>
           ) : null}
 
-          <div className="mt-8 border-t border-slate-200 pt-5 text-center">
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-slate-400">
+          <div className="mt-8 border-t border-white/10 pt-5 text-center">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
               Demo Access
             </p>
-            <p className="mt-3 text-sm text-slate-600">
+            <p className="mt-3 text-sm text-slate-300">
               requester1@ranaka.org / Password@123
             </p>
           </div>

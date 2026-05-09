@@ -24,8 +24,8 @@ function App() {
         visibleToasts={3}
         toastOptions={{
           className:
-            "min-h-[60px] rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-slate-900 shadow-[0_18px_45px_-22px_rgba(15,23,42,0.35)] backdrop-blur-md",
-          descriptionClassName: "text-sm text-slate-500",
+            "min-h-[60px] rounded-[1.2rem] border border-white/10 bg-slate-950/88 px-4 py-3 text-slate-50 shadow-[0_18px_45px_-22px_rgba(2,6,23,0.92)] backdrop-blur-xl",
+          descriptionClassName: "text-sm text-slate-400",
         }}
       />
     </>

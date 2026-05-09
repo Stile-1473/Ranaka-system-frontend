@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Area,
@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import StatCard from "../../components/dashboard/StatCard";
+import SkeletonBlock from "../../components/feedback/SkeletonBlock";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
 import RequestPriorityBadge from "../../components/requests/RequestPriorityBadge";
@@ -73,210 +74,306 @@ function RequesterDashboardPage() {
   }, [fetchMyRequests, fetchSummary]);
 
   const allRequests = myRequestsPage?.content ?? [];
-  const recentRequests = allRequests.slice(0, 5);
-  const attentionRequests = allRequests
-    .filter((request) =>
-      ["RETURNED_FOR_CORRECTION", "DRAFT"].includes(request.status)
-    )
-    .slice(0, 3);
-  const trendData = buildTrendData(allRequests);
+  const trendData = useMemo(() => buildTrendData(allRequests), [allRequests]);
+
+  const draftCount = useMemo(
+    () => allRequests.filter((request) => request.status === "DRAFT").length,
+    [allRequests]
+  );
+
+  const actionRequests = useMemo(
+    () =>
+      allRequests.filter(
+        (request) =>
+          ["RETURNED_FOR_CORRECTION", "DRAFT"].includes(request.status) ||
+          request.isOverdue
+      ),
+    [allRequests]
+  );
+
+  const recentRequests = useMemo(() => allRequests.slice(0, 6), [allRequests]);
+
+  const progressCounts = useMemo(
+    () => ({
+      admin: allRequests.filter(
+        (request) =>
+          request.currentStage === "ADMIN_RECOMMENDATION" ||
+          request.status === "PENDING_ADMIN_RECOMMENDATION"
+      ).length,
+      gm: allRequests.filter(
+        (request) =>
+          request.currentStage === "GM_APPROVAL" ||
+          request.status === "PENDING_GM_APPROVAL"
+      ).length,
+      ceo: allRequests.filter(
+        (request) =>
+          request.currentStage === "CEO_AUTHORIZATION" ||
+          request.status === "PENDING_CEO_AUTHORIZATION"
+      ).length,
+    }),
+    [allRequests]
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="section-title">Your Workspace</p>
-          <h2 className="mt-2 text-2xl font-semibold text-slate-900">
-            What needs your attention
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Start, fix, or follow up on procurement requests from one place.
+      <div className="page-action-bar">
+        <div className="page-action-copy">
+          <p className="section-title">Requester Workspace</p>
+          <h2 className="page-action-title">Create requests, resolve returns, and track live approval movement.</h2>
+          <p className="page-action-subtitle">
+            Start from what matters now: pending work, current queue position, and the latest request activity.
           </p>
         </div>
-        <Button asChild>
-          <Link to="/requests/new">New Request</Link>
-        </Button>
-      </div>
-
-      <Card>
-        {myRequestsStatus === "loading" ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-500">
-            Checking your requests. If the server is waking up, this may take a moment...
-          </div>
-        ) : attentionRequests.length === 0 ? (
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">
-                Nothing needs your action right now
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Your submitted requests will keep moving through review. You only need to act when a draft or returned request appears here.
-              </p>
-            </div>
-            <Button asChild variant="secondary" className="shrink-0">
-              <Link to="/requests">View My Requests</Link>
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {attentionRequests.map((request) => (
-              <Link
-                key={request.id}
-                to={`/requests/${request.id}`}
-                className="block rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 transition hover:border-brand-200 hover:bg-white"
-              >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <RequestStatusBadge
-                        status={request.status}
-                        isOverdue={request.isOverdue}
-                      />
-                      <RequestPriorityBadge priority={request.priority} />
-                    </div>
-                    <p className="mt-2 truncate text-sm font-semibold text-slate-900">
-                      {request.title}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {getRequestNextStep(request)}
-                    </p>
-                  </div>
-                  <span className="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700">
-                    {request.status === "DRAFT" ? "Continue" : "Fix Request"}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="All Requests" value={summary?.totalRequests ?? "--"} />
-        <StatCard label="Waiting for Review" value={summary?.pendingRequests ?? "--"} tone="amber" />
-        <StatCard label="Needs Correction" value={summary?.returnedRequests ?? "--"} />
-        <StatCard label="Finished" value={summary?.completedRequests ?? "--"} />
-      </div>
-
-      <Card>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">Request Activity</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Requests created or submitted over the last 7 days.
-            </p>
-          </div>
-          <Button asChild variant="secondary" className="shrink-0">
-            <Link to="/requests">Open My Requests</Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button asChild variant="secondary">
+            <Link to="/requests">View My Requests</Link>
+          </Button>
+          <Button asChild>
+            <Link to="/requests/new">New Request</Link>
           </Button>
         </div>
+      </div>
 
-        <div className="mt-6 h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={trendData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="requestActivityFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#238b64" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#238b64" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tickLine={false}
-                axisLine={false}
-                tick={{ fill: "#64748b", fontSize: 12 }}
-              />
-              <YAxis
-                allowDecimals={false}
-                tickLine={false}
-                axisLine={false}
-                tick={{ fill: "#64748b", fontSize: 12 }}
-              />
-              <Tooltip
-                contentStyle={{
-                  borderRadius: "10px",
-                  border: "1px solid #e2e8f0",
-                  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
-                }}
-                formatter={(value) => [`${value}`, "Requests"]}
-                labelFormatter={(label, payload) => {
-                  const point = payload?.[0]?.payload;
-                  return point?.date ? formatDate(point.date) : label;
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="requests"
-                stroke="#238b64"
-                strokeWidth={2}
-                fill="url(#requestActivityFill)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Total Requests" value={summary?.totalRequests ?? "--"} />
+        <StatCard
+          label="Drafts"
+          value={draftCount}
+          helper="Requests still being prepared"
+        />
+        <StatCard
+          label="Waiting for Review"
+          value={summary?.pendingRequests ?? "--"}
+          tone="amber"
+          helper="Requests moving through approval"
+        />
+        <StatCard
+          label="Needs Action"
+          value={actionRequests.length}
+          tone={actionRequests.length > 0 ? "rose" : "brand"}
+          helper="Drafts, returns, and overdue items"
+        />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="panel-title">Needs Your Action</h3>
+              <p className="mt-1 text-sm text-slate-400">
+                Requests that need editing, resubmission, or closer follow-up.
+              </p>
+            </div>
+            <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-semibold text-slate-300">
+              {actionRequests.length} items
+            </span>
+          </div>
+
+          <div className="mt-5">
+            {myRequestsStatus === "loading" ? (
+              <SkeletonBlock rows={3} />
+            ) : actionRequests.length === 0 ? (
+              <div className="rounded-[1.25rem] border border-dashed border-white/12 bg-white/5 px-4 py-8 text-sm text-slate-400">
+                Nothing needs your action right now. Submitted requests are moving through the workflow.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {actionRequests.slice(0, 4).map((request) => (
+                  <Link
+                    key={request.id}
+                    to={`/requests/${request.id}`}
+                    className="block rounded-[1.25rem] border border-white/10 bg-white/5 px-4 py-4 transition hover:border-emerald-400/20 hover:bg-white/8"
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <RequestStatusBadge
+                            status={request.status}
+                            isOverdue={request.isOverdue}
+                          />
+                          <RequestPriorityBadge priority={request.priority} />
+                        </div>
+                        <p className="mt-2 truncate text-sm font-semibold text-slate-50">
+                          {request.title}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-400">
+                          {getRequestNextStep(request)}
+                        </p>
+                      </div>
+                      <div className="text-sm lg:text-right">
+                        <p className="font-semibold text-slate-50">
+                          {formatCurrency(request.estimatedCost)}
+                        </p>
+                        <p className="mt-1 text-slate-400">
+                          {request.status === "DRAFT" ? "Continue draft" : "Open request"}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="panel-title">Request Activity</h3>
+              <p className="mt-1 text-sm text-slate-400">
+                Requests created or submitted over the last 7 days.
+              </p>
+            </div>
+            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+              7 days
+            </span>
+          </div>
+
+          <div className="mt-5 h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="requestActivityFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.24} />
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  stroke="rgba(148,163,184,0.12)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: "#94a3b8", fontSize: 12 }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: "18px",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    backgroundColor: "rgba(2, 6, 23, 0.92)",
+                    color: "#f8fafc",
+                    boxShadow: "0 24px 70px rgba(2, 6, 23, 0.5)",
+                  }}
+                  formatter={(value) => [`${value}`, "Requests"]}
+                  labelFormatter={(label, payload) => {
+                    const point = payload?.[0]?.payload;
+                    return point?.date ? formatDate(point.date) : label;
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="requests"
+                  stroke="#22c55e"
+                  strokeWidth={2}
+                  fill="url(#requestActivityFill)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            {[
+              ["Admin", progressCounts.admin],
+              ["GM", progressCounts.gm],
+              ["CEO", progressCounts.ceo],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="rounded-[1.1rem] border border-white/10 bg-white/5 px-4 py-3"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  {label}
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-50">{value}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
 
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Recent Requests</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Your latest drafts and submissions.
+            <h3 className="panel-title">Recent Requests</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              Your latest drafts and submissions with current workflow position.
             </p>
           </div>
           <Button asChild variant="secondary" className="shrink-0">
-            <Link to="/requests">View All</Link>
+            <Link to="/requests">Open Full Queue</Link>
           </Button>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-5">
           {myRequestsStatus === "loading" ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-500">
-              Checking your recent requests...
-            </div>
+            <SkeletonBlock rows={4} />
           ) : recentRequests.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
-              No requests yet. Create your first draft when you are ready.
+            <div className="rounded-[1.25rem] border border-dashed border-white/12 bg-white/5 px-4 py-8 text-sm text-slate-400">
+              No requests yet. Create your first procurement request when you are ready.
             </div>
           ) : (
-            <div className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
-              {recentRequests.map((request) => (
-                <Link
-                  key={request.id}
-                  to={`/requests/${request.id}`}
-                  className="block px-4 py-4 transition hover:bg-slate-50"
-                >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-900">
-                        {request.title}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="table-shell">
+              <div className="table-header-row hidden grid-cols-[minmax(0,1.5fr)_0.8fr_0.8fr_0.8fr_0.8fr] gap-4 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] lg:grid">
+                <span>Request</span>
+                <span>Status</span>
+                <span>Stage</span>
+                <span>Amount</span>
+                <span>Updated</span>
+              </div>
+
+              <div className="divide-y divide-white/10">
+                {recentRequests.map((request) => (
+                  <Link
+                    key={request.id}
+                    to={`/requests/${request.id}`}
+                    className="table-data-row block px-4 py-4"
+                  >
+                    <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_0.8fr_0.8fr_0.8fr_0.8fr] lg:items-center">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-50">
+                          {request.title}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <RequestPriorityBadge priority={request.priority} />
+                          <span className="text-xs text-slate-400">
+                            {request.departmentName || "No department"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
                         <RequestStatusBadge
                           status={request.status}
                           isOverdue={request.isOverdue}
                         />
-                        <RequestPriorityBadge priority={request.priority} />
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
-                        <span>{request.departmentName || "No department"}</span>
-                        <span>{formatWorkflowStage(request.currentStage)}</span>
+
+                      <div className="text-sm text-slate-300">
+                        {formatWorkflowStage(request.currentStage)}
                       </div>
-                    </div>
-                    <div className="text-sm lg:text-right">
-                      <p className="font-semibold text-slate-900">
+
+                      <div className="text-sm font-semibold text-slate-50">
                         {formatCurrency(request.estimatedCost)}
-                      </p>
-                      <p className="mt-1 text-slate-500">
+                      </div>
+
+                      <div className="text-sm text-slate-400">
                         {request.submittedAt
-                          ? `Submitted ${formatDateTime(request.submittedAt)}`
-                          : `Drafted ${formatDateTime(request.createdAt)}`}
-                      </p>
+                          ? formatDateTime(request.submittedAt)
+                          : formatDateTime(request.createdAt)}
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
         </div>

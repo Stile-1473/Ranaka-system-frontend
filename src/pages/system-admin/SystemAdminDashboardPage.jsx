@@ -12,10 +12,11 @@ import {
 } from "recharts";
 import Card from "../../components/ui/Card";
 import StatCard from "../../components/dashboard/StatCard";
+import SkeletonBlock from "../../components/feedback/SkeletonBlock";
 import { useDashboardQueryStore } from "../../stores/query/dashboardQueryStore";
 import { formatDate } from "../../utils/dateFormatters";
 
-const PRIORITY_COLORS = ["#dc2626", "#d97706", "#238b64", "#94a3b8"];
+const PRIORITY_COLORS = ["#dc2626", "#d97706", "#22c55e", "#94a3b8"];
 
 const mapTrendData = (trends) =>
   (Array.isArray(trends) ? trends : []).map((trend) => ({
@@ -100,13 +101,14 @@ function SystemAdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-slate-900">
-          System Dashboard
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Track platform activity, workflow health, and master data readiness.
-        </p>
+      <div className="page-action-bar">
+        <div className="page-action-copy">
+          <p className="section-title">Operational Oversight</p>
+          <h2 className="page-action-title">Monitor workflow health, master data, and SLA risk from one control surface.</h2>
+          <p className="page-action-subtitle">
+            Start with the analytics that matter most: throughput, overdue pressure, stage performance, and department demand.
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -137,43 +139,44 @@ function SystemAdminDashboardPage() {
       <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
         <Card>
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">
+            <h3 className="panel-title">
               Workflow Trend
             </h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-slate-400">
               Submitted, completed, returned, and rejected requests over the last 30 days.
             </p>
           </div>
 
           <div className="mt-6 h-80">
             {requestTrendsStatus === "loading" ? (
-              <div className="flex h-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-500">
-                Loading trend data...
-              </div>
-            ) : trendData.length === 0 ? (
-              <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+              <SkeletonBlock variant="chart" />
+          ) : trendData.length === 0 ? (
+              <div className="flex h-full items-center justify-center rounded-[1.25rem] border border-dashed border-white/12 bg-white/5 text-sm text-slate-400">
                 No trend data available yet.
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+                  <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="label"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fill: "#64748b", fontSize: 12 }}
+                    tick={{ fill: "#94a3b8", fontSize: 12 }}
                   />
                   <YAxis
                     allowDecimals={false}
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fill: "#64748b", fontSize: 12 }}
+                    tick={{ fill: "#94a3b8", fontSize: 12 }}
                   />
                   <Tooltip
                     contentStyle={{
-                      borderRadius: "10px",
-                      border: "1px solid #e2e8f0",
-                      boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
+                      borderRadius: "18px",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      backgroundColor: "rgba(2, 6, 23, 0.92)",
+                      color: "#f8fafc",
+                      boxShadow: "0 24px 70px rgba(2, 6, 23, 0.5)",
                     }}
                     labelFormatter={(label, payload) => {
                       const point = payload?.[0]?.payload;
@@ -184,7 +187,7 @@ function SystemAdminDashboardPage() {
                     type="monotone"
                     dataKey="submittedCount"
                     name="Submitted"
-                    stroke="#238b64"
+                    stroke="#22c55e"
                     strokeWidth={2}
                     dot={false}
                   />
@@ -192,7 +195,7 @@ function SystemAdminDashboardPage() {
                     type="monotone"
                     dataKey="completedCount"
                     name="Completed"
-                    stroke="#0f172a"
+                    stroke="#e2e8f0"
                     strokeWidth={2}
                     dot={false}
                   />
@@ -220,17 +223,17 @@ function SystemAdminDashboardPage() {
 
         <Card>
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">
+            <h3 className="panel-title">
               Priority Mix
             </h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-slate-400">
               Current request distribution by urgency.
             </p>
           </div>
 
           <div className="mt-6 h-72">
             {priorityData.length === 0 ? (
-              <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+              <div className="flex h-full items-center justify-center rounded-[1.25rem] border border-dashed border-white/12 bg-white/5 text-sm text-slate-400">
                 No priority data available yet.
               </div>
             ) : (
@@ -253,9 +256,11 @@ function SystemAdminDashboardPage() {
                   </Pie>
                   <Tooltip
                     contentStyle={{
-                      borderRadius: "10px",
-                      border: "1px solid #e2e8f0",
-                      boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
+                      borderRadius: "18px",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      backgroundColor: "rgba(2, 6, 23, 0.92)",
+                      color: "#f8fafc",
+                      boxShadow: "0 24px 70px rgba(2, 6, 23, 0.5)",
                     }}
                   />
                 </PieChart>
@@ -272,10 +277,10 @@ function SystemAdminDashboardPage() {
             ].map(([label, value]) => (
               <div
                 key={label}
-                className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3"
+                className="flex items-center justify-between rounded-[1.1rem] border border-white/10 bg-white/5 px-4 py-3"
               >
-                <span className="text-sm text-slate-600">{label}</span>
-                <span className="text-sm font-semibold text-slate-900">{value}</span>
+                <span className="text-sm text-slate-300">{label}</span>
+                <span className="text-sm font-semibold text-slate-50">{value}</span>
               </div>
             ))}
           </div>
@@ -285,29 +290,29 @@ function SystemAdminDashboardPage() {
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">
+            <h3 className="panel-title">
               Stage Performance
             </h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-slate-400">
               Pending work and average handling time at each approval stage.
             </p>
           </div>
 
-          <div className="mt-6 overflow-hidden rounded-lg border border-slate-200">
-            <div className="grid grid-cols-[1.2fr_0.8fr_0.8fr] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <div className="table-shell mt-6">
+            <div className="table-header-row grid grid-cols-[1.2fr_0.8fr_0.8fr] gap-4 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em]">
               <span>Stage</span>
               <span>Pending</span>
               <span>Avg Hours</span>
             </div>
-            <div className="divide-y divide-slate-200">
+            <div className="divide-y divide-white/10">
               {(stagePerformance || []).map((stage) => (
                 <div
                   key={stage.stageName}
-                  className="grid grid-cols-[1.2fr_0.8fr_0.8fr] gap-4 px-4 py-4 text-sm"
+                  className="table-data-row grid grid-cols-[1.2fr_0.8fr_0.8fr] gap-4 px-4 py-4 text-sm"
                 >
-                  <span className="font-medium text-slate-900">{stage.stageName}</span>
-                  <span className="text-slate-600">{stage.pendingCount ?? 0}</span>
-                  <span className="text-slate-600">
+                  <span className="font-medium text-slate-50">{stage.stageName}</span>
+                  <span className="text-slate-300">{stage.pendingCount ?? 0}</span>
+                  <span className="text-slate-300">
                     {stage.avgProcessingTimeHours?.toFixed?.(1) ?? "0.0"}
                   </span>
                 </div>
@@ -318,20 +323,20 @@ function SystemAdminDashboardPage() {
 
         <Card>
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">
+            <h3 className="panel-title">
               Department Activity
             </h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-slate-400">
               Top departments by request volume and throughput.
             </p>
           </div>
 
           {departmentStatsStatus === "loading" ? (
-            <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-10 text-sm text-slate-500">
+            <div className="mt-6 rounded-[1.25rem] border border-white/10 bg-white/5 px-4 py-10 text-sm text-slate-400">
               Loading department activity...
             </div>
           ) : topDepartments.length === 0 ? (
-            <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-sm text-slate-500">
+            <div className="mt-6 rounded-[1.25rem] border border-dashed border-white/12 bg-white/5 px-4 py-10 text-sm text-slate-400">
               No department activity available yet.
             </div>
           ) : (
@@ -339,22 +344,22 @@ function SystemAdminDashboardPage() {
               {topDepartments.map((department) => (
                 <div
                   key={department.departmentName}
-                  className="rounded-lg border border-slate-200 px-4 py-4"
+                  className="rounded-[1.25rem] border border-white/10 bg-white/5 px-4 py-4"
                 >
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">
+                      <p className="text-sm font-semibold text-slate-50">
                         {department.departmentName}
                       </p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-slate-400">
                         Avg approval time {department.avgApprovalTime?.toFixed?.(1) ?? "0.0"} hours
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-slate-900">
+                      <p className="text-sm font-semibold text-slate-50">
                         {department.totalRequests ?? 0}
                       </p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-slate-400">
                         {department.completedRequests ?? 0} completed
                       </p>
                     </div>

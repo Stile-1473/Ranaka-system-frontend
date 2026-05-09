@@ -126,8 +126,8 @@ function AppShell() {
     <div className="app-shell">
       {/* Shared sidebar across all authenticated pages */}
       <AppSidebar />
-      <main className="min-h-screen lg:pl-[20rem]">
-        <div className="px-4 py-4 lg:px-8 lg:py-4">
+      <main className="relative z-10 min-h-screen lg:pl-[8.5rem]">
+        <div className="mx-auto max-w-[1700px] px-4 py-4 lg:px-6 lg:py-6">
           {/* Sticky role-aware header */}
           <AppHeader title={pageMeta.title} subtitle={pageMeta.subtitle} />
           <div className="mt-6">
