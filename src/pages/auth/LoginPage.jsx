@@ -30,7 +30,7 @@ function LoginPage() {
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "requester1@ranaka.org",
-      password: "Password@123",
+      password: "Ranaka@123",
     },
   });
 
@@ -97,7 +97,7 @@ function LoginPage() {
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
-                  placeholder="Password@123"
+                  placeholder="Ranaka@123"
                   className="w-full rounded-[1.05rem] border border-white/10 bg-white/6 px-4 py-3 pr-12 text-sm text-slate-50 shadow-[0_16px_40px_-30px_rgba(2,6,23,1)] outline-none backdrop-blur-xl transition placeholder:text-slate-500 focus:border-emerald-400/35 focus:bg-white/8 focus:ring-4 focus:ring-emerald-500/10"
                   {...register("password")}
                 />
@@ -142,7 +142,7 @@ function LoginPage() {
               Demo Access
             </p>
             <p className="mt-3 text-sm text-slate-300">
-              requester1@ranaka.org / Password@123
+              requester1@ranaka.org / Ranaka@123
             </p>
           </div>
         </Card>

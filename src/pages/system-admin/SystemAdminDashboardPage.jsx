@@ -232,7 +232,7 @@ function SystemAdminDashboardPage() {
             </p>
           </div>
 
-          <div className="mt-6 h-72">
+          <div className="mt-6 h-60 min-w-0 sm:h-72">
             {priorityData.length === 0 ? (
               <div className="flex h-full items-center justify-center rounded-[1.25rem] border border-dashed border-white/12 bg-white/5 text-sm text-slate-400">
                 No priority data available yet.
@@ -244,8 +244,10 @@ function SystemAdminDashboardPage() {
                     data={priorityData}
                     dataKey="value"
                     nameKey="name"
-                    innerRadius={56}
-                    outerRadius={86}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="50%"
+                    outerRadius="76%"
                     paddingAngle={3}
                   >
                     {priorityData.map((entry, index) => (

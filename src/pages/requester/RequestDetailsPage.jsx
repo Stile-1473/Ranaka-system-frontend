@@ -67,9 +67,9 @@ function SummaryStat({ label, value, helper }) {
 
 function InfoRow({ label, value }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-white/6 py-3 last:border-b-0 last:pb-0 first:pt-0">
+    <div className="flex flex-col gap-2 border-b border-white/6 py-3 last:border-b-0 last:pb-0 first:pt-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <p className="text-sm text-slate-400">{label}</p>
-      <p className="max-w-[60%] text-right text-sm font-medium text-slate-100">
+      <p className="text-sm font-medium text-slate-100 sm:max-w-[60%] sm:text-right">
         {value}
       </p>
     </div>
@@ -260,7 +260,7 @@ function RequestDetailsPage() {
         </div>
 
         <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] px-4 py-4">
-          <div className="flex flex-wrap gap-3 lg:grid lg:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {workflowSteps.map((step, index) => {
               const isDone = index < workflowIndex;
               const isCurrent = index === workflowIndex;
@@ -382,7 +382,63 @@ function RequestDetailsPage() {
               </div>
             ) : (
               <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-white/8 bg-slate-950/40">
-                <div className="overflow-x-auto">
+                <div className="grid gap-3 p-3 md:hidden">
+                  {(requestDetails.lineItems || []).map((item, index) => (
+                    <div
+                      key={item.id || `${item.itemDescription}-${index}-mobile`}
+                      className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] px-4 py-4"
+                    >
+                      <p className="font-medium text-slate-100">
+                        {item.itemDescription || `Item ${index + 1}`}
+                      </p>
+                      {item.notes ? (
+                        <p className="mt-2 text-xs leading-6 text-slate-400">
+                          {item.notes}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                            Qty
+                          </p>
+                          <p className="mt-1 text-slate-200">{item.quantity ?? 0}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                            Unit
+                          </p>
+                          <p className="mt-1 text-slate-200">{item.unit || "Not set"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                            Unit Cost
+                          </p>
+                          <p className="mt-1 text-slate-200">{formatCurrency(item.unitCost)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                            Total
+                          </p>
+                          <p className="mt-1 font-medium text-slate-50">
+                            {formatCurrency(item.totalCost)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="rounded-[1.1rem] border border-white/8 bg-white/[0.04] px-4 py-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                      Total Estimated Cost
+                    </p>
+                    <p className="mt-2 text-base font-semibold text-slate-50">
+                      {formatCurrency(requestDetails.estimatedCost)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
                   <table className="min-w-full divide-y divide-white/6 text-sm">
                     <thead className="bg-white/[0.03] text-left text-xs uppercase tracking-[0.16em] text-slate-500">
                       <tr>

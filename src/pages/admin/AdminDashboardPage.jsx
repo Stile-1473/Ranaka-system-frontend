@@ -278,7 +278,7 @@ function AdminDashboardPage() {
               </p>
             </div>
 
-            <div className="mt-6 h-56">
+            <div className="mt-6 h-52 min-w-0 sm:h-56">
               {priorityData.length === 0 ? (
                 <div className="flex h-full items-center justify-center rounded-[1.25rem] border border-dashed border-white/12 bg-white/5 px-4 text-sm text-slate-400">
                   No priority distribution available yet.
@@ -290,8 +290,10 @@ function AdminDashboardPage() {
                       data={priorityData}
                       dataKey="value"
                       nameKey="name"
-                      innerRadius={48}
-                      outerRadius={78}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius="48%"
+                      outerRadius="74%"
                       paddingAngle={3}
                     >
                       {priorityData.map((entry, index) => (

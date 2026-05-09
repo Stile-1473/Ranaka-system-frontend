@@ -456,7 +456,7 @@ function ReportsPage() {
             </Badge>
           }
         >
-          <div className="h-72">
+          <div className="h-60 min-w-0 sm:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={approvalBreakdown}
@@ -512,8 +512,10 @@ function ReportsPage() {
                     data={priorityMixData}
                     dataKey="value"
                     nameKey="name"
-                    innerRadius={52}
-                    outerRadius={84}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="48%"
+                    outerRadius="74%"
                     paddingAngle={3}
                   >
                     {priorityMixData.map((entry, index) => (
