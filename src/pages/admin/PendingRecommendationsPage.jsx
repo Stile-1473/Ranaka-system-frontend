@@ -312,8 +312,8 @@ function PendingRecommendationsPage() {
                 </div>
               </div>
             ) : (
-              <>
-                <div className="table-header-row sticky top-0 hidden min-w-[1180px] grid-cols-[minmax(0,1.7fr)_1fr_0.8fr_0.9fr_0.9fr_0.95fr_0.85fr] gap-4 px-6 py-4 text-xs font-semibold uppercase tracking-[0.16em] lg:grid">
+              <div className="divide-y divide-white/8">
+                <div className="table-header-row sticky top-0 hidden grid-cols-[minmax(0,1.7fr)_1fr_0.8fr_0.9fr_0.9fr_0.95fr_0.85fr] gap-4 px-6 py-4 text-xs font-semibold uppercase tracking-[0.16em] lg:grid">
                   <span>Request</span>
                   <span>Requester</span>
                   <span>Priority</span>
@@ -323,76 +323,157 @@ function PendingRecommendationsPage() {
                   <span className="text-right">Review</span>
                 </div>
 
-                <div className="divide-y divide-white/8">
-                  {filteredQueue.map((request) => (
-                    <div
-                      key={request.id}
-                      className={`table-data-row min-w-[1180px] px-6 py-4 transition ${
-                        request.isOverdue ? "bg-rose-500/[0.04]" : ""
-                      }`}
-                    >
-                      <div className="grid grid-cols-[minmax(0,1.7fr)_1fr_0.8fr_0.9fr_0.9fr_0.95fr_0.85fr] gap-4 lg:items-center">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-50">
-                            {request.title}
-                          </p>
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <RequestStatusBadge
-                              status={request.status}
-                              isOverdue={request.isOverdue}
-                            />
-                            <span className="text-xs text-slate-400">
-                              {request.departmentName || "No department"}
-                            </span>
-                            {request.isOverdue ? (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-200">
-                                <AlertTriangle className="h-3.5 w-3.5" />
-                                Overdue
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        <div className="text-sm text-slate-300">
-                          <div>{request.requesterName || "Requester"}</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {formatDateTime(request.submittedAt || request.createdAt)}
-                          </div>
-                        </div>
-
-                        <div>
+                {filteredQueue.map((request) => (
+                  <div
+                    key={request.id}
+                    className={`table-data-row px-4 py-4 transition lg:px-6 ${
+                      request.isOverdue ? "bg-rose-500/[0.04]" : ""
+                    }`}
+                  >
+                    <div className="space-y-4 lg:hidden">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-50">
+                          {request.title}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <RequestStatusBadge
+                            status={request.status}
+                            isOverdue={request.isOverdue}
+                          />
                           <RequestPriorityBadge priority={request.priority} />
-                        </div>
-
-                        <div className="text-sm text-slate-300">
-                          {formatDate(request.requiredByDate)}
-                        </div>
-
-                        <div className="text-sm font-semibold text-slate-50">
-                          {formatCurrency(request.estimatedCost)}
-                        </div>
-
-                        <div className="text-sm text-slate-300">
-                          {formatWorkflowStage(request.currentStage)}
-                        </div>
-
-                        <div className="flex justify-end">
-                          <Button
-                            asChild
-                            variant="secondary"
-                            className="gap-2 rounded-2xl px-3 py-2"
-                          >
-                            <Link to={`/admin/recommendations/${request.id}`}>
-                              <span>Review</span>
-                              <ArrowUpRight className="h-4 w-4" />
-                            </Link>
-                          </Button>
+                          {request.isOverdue ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-200">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              Overdue
+                            </span>
+                          ) : null}
                         </div>
                       </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                            Requester
+                          </p>
+                          <p className="mt-1 text-slate-200">
+                            {request.requesterName || "Requester"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                            Department
+                          </p>
+                          <p className="mt-1 text-slate-200">
+                            {request.departmentName || "No department"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                            Required By
+                          </p>
+                          <p className="mt-1 text-slate-200">
+                            {formatDate(request.requiredByDate)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                            Amount
+                          </p>
+                          <p className="mt-1 font-semibold text-slate-50">
+                            {formatCurrency(request.estimatedCost)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                            Stage
+                          </p>
+                          <p className="mt-1 text-slate-200">
+                            {formatWorkflowStage(request.currentStage)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                            Submitted
+                          </p>
+                          <p className="mt-1 text-slate-200">
+                            {formatDateTime(request.submittedAt || request.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <Button
+                        asChild
+                        variant="secondary"
+                        className="w-full justify-center gap-2 rounded-2xl"
+                      >
+                        <Link to={`/admin/recommendations/${request.id}`}>
+                          <span>Review</span>
+                          <ArrowUpRight className="h-4 w-4" />
+                        </Link>
+                      </Button>
                     </div>
-                  ))}
-                </div>
-              </>
+
+                    <div className="hidden lg:grid lg:grid-cols-[minmax(0,1.7fr)_1fr_0.8fr_0.9fr_0.9fr_0.95fr_0.85fr] lg:gap-4 lg:items-center">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-50">
+                          {request.title}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <RequestStatusBadge
+                            status={request.status}
+                            isOverdue={request.isOverdue}
+                          />
+                          <span className="text-xs text-slate-400">
+                            {request.departmentName || "No department"}
+                          </span>
+                          {request.isOverdue ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-200">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              Overdue
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-slate-300">
+                        <div>{request.requesterName || "Requester"}</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {formatDateTime(request.submittedAt || request.createdAt)}
+                        </div>
+                      </div>
+
+                      <div>
+                        <RequestPriorityBadge priority={request.priority} />
+                      </div>
+
+                      <div className="text-sm text-slate-300">
+                        {formatDate(request.requiredByDate)}
+                      </div>
+
+                      <div className="text-sm font-semibold text-slate-50">
+                        {formatCurrency(request.estimatedCost)}
+                      </div>
+
+                      <div className="text-sm text-slate-300">
+                        {formatWorkflowStage(request.currentStage)}
+                      </div>
+
+                      <div className="flex justify-end">
+                        <Button
+                          asChild
+                          variant="secondary"
+                          className="gap-2 rounded-2xl px-3 py-2"
+                        >
+                          <Link to={`/admin/recommendations/${request.id}`}>
+                            <span>Review</span>
+                            <ArrowUpRight className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </Card>
