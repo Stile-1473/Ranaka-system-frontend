@@ -10,7 +10,7 @@ const TextareaField = forwardRef(
       <label className={cn("flex flex-col gap-2", className)}>
         <span className="text-sm font-semibold text-slate-200">{label}</span>
         {description ? (
-          <span className="text-xs text-slate-400">{description}</span>
+          <span className="text-xs text-slate-300">{description}</span>
         ) : null}
         <textarea
           ref={ref}

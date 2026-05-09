@@ -19,7 +19,7 @@ const SelectField = forwardRef(
       <label className={cn("flex flex-col gap-2", className)}>
         <span className="text-sm font-semibold text-slate-200">{label}</span>
         {description ? (
-          <span className="text-xs text-slate-400">{description}</span>
+          <span className="text-xs text-slate-300">{description}</span>
         ) : null}
         <div className="relative">
           <select
@@ -33,7 +33,7 @@ const SelectField = forwardRef(
           >
             {children}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         </div>
         {error ? <span className="text-xs text-rose-300">{error}</span> : null}
       </label>
