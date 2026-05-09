@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import {
+  CartesianGrid,
   Cell,
   Line,
   LineChart,
