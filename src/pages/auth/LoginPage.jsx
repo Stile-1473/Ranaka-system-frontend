@@ -29,8 +29,8 @@ function LoginPage() {
   } = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "requester1@ranaka.org",
-      password: "Ranaka@123",
+      email: "",
+      password: "",
     },
   });
 
