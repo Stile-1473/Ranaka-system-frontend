@@ -1,4 +1,4 @@
-import { Bell, LogOut, Menu, UserCircle2 } from "lucide-react";
+import { Bell, LogOut, Menu } from "lucide-react";
 import { toast } from "sonner";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Button from "../ui/Button";
@@ -20,7 +20,7 @@ function AppHeader({ title, subtitle }) {
   };
 
   return (
-    <header className="sticky top-4 z-20 rounded-[1.35rem] border border-white/10 bg-slate-950/40 px-4 py-3.5 shadow-[0_22px_70px_-42px_rgba(2,6,23,0.92)] backdrop-blur-2xl">
+    <header className="fixed left-4 right-4 top-4 z-20 rounded-[1.35rem] border border-white/10 bg-slate-950/40 px-4 py-3.5 shadow-[0_22px_70px_-42px_rgba(2,6,23,0.92)] backdrop-blur-2xl lg:sticky lg:left-auto lg:right-auto lg:top-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <button
@@ -60,18 +60,6 @@ function AppHeader({ title, subtitle }) {
             >
               {unreadCount}
             </span>
-          </Link>
-
-          <Link
-            to="/profile"
-            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-xl transition ${
-              location.pathname === "/profile"
-                ? "border-emerald-400/35 bg-emerald-500/16 text-emerald-300 shadow-[0_0_22px_rgba(34,197,94,0.22)]"
-                : "border-white/10 bg-white/6 text-slate-300 hover:bg-white/10 hover:text-slate-50"
-            }`}
-          >
-            <UserCircle2 className="h-4 w-4" />
-            <span className="sr-only">Profile</span>
           </Link>
 
           <Button

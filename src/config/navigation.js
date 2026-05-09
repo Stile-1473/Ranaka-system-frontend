@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Settings,
   ShieldCheck,
+  UserCircle2,
   UserCog,
 } from "lucide-react";
 import { USER_ROLES } from "./constants";
@@ -44,4 +45,5 @@ export const navigationByRole = {
 // Secondary links available regardless of the current role.
 export const secondaryNavigation = [
   { label: "Notifications", to: "/notifications", icon: Bell },
+  { label: "Profile", to: "/profile", icon: UserCircle2 },
 ];

@@ -78,16 +78,17 @@ const normalizeFieldPath = (path) => path.replace(/\[(\d+)\]/g, ".$1");
 
 const stepDefinitions = [
   {
-    key: "basics",
-    title: "Request Basics",
-    description: "Start with the request identity, owner, and required date.",
-    fields: ["title", "departmentId", "priority", "requiredByDate"],
-  },
-  {
     key: "details",
-    title: "Business Details",
-    description: "Describe what is needed and explain the business reason.",
-    fields: ["description", "justification"],
+    title: "Request Details",
+    description: "Add the request details, ownership, and business reason.",
+    fields: [
+      "title",
+      "departmentId",
+      "priority",
+      "requiredByDate",
+      "description",
+      "justification",
+    ],
   },
   {
     key: "items",
@@ -393,14 +394,13 @@ function CreateRequestPage() {
     (department) => String(department.id) === String(watchedDepartmentId)
   );
 
-  const basicsComplete = Boolean(
+  const requestDetailsComplete = Boolean(
     watchedTitle?.trim() &&
       selectedDepartment &&
       watchedPriority &&
-      watchedRequiredByDate
-  );
-  const detailsComplete = Boolean(
-    watchedDescription?.trim() && watchedJustification?.trim()
+      watchedRequiredByDate &&
+      watchedDescription?.trim() &&
+      watchedJustification?.trim()
   );
   const completedLineItems = (lineItems || []).filter(
     (item) =>
@@ -411,11 +411,10 @@ function CreateRequestPage() {
   ).length;
   const lineItemsComplete =
     fields.length > 0 && completedLineItems === fields.length && !errors.lineItems;
-  const readyToSubmit = basicsComplete && detailsComplete && lineItemsComplete;
+  const readyToSubmit = requestDetailsComplete && lineItemsComplete;
 
   const stepStates = [
-    basicsComplete,
-    detailsComplete,
+    requestDetailsComplete,
     lineItemsComplete,
     readyToSubmit,
     readyToSubmit,
@@ -517,25 +516,45 @@ function CreateRequestPage() {
     return <StepBadge label={incompleteLabel} />;
   };
 
+  const renderSaveDraftButton = () => (
+    <Button
+      type="button"
+      className="rounded-2xl"
+      disabled={isBusy}
+      onClick={handleSubmit(handleSaveDraft)}
+    >
+      {createRequestStatus === "loading" && submitRequestStatus !== "loading"
+        ? "Saving draft..."
+        : updateRequestStatus === "loading" && submitRequestStatus !== "loading"
+          ? "Saving changes..."
+          : isEditMode
+            ? "Save Changes"
+            : "Save Draft"}
+    </Button>
+  );
+
   const renderCurrentStep = () => {
     if (currentStep === 0) {
       return (
         <Card>
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-2.5">
-              <FileText className="h-4 w-4 text-emerald-300" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-lg font-semibold text-slate-100">
-                  Request Basics
-                </h3>
-                {renderStepState(basicsComplete)}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-2.5">
+                <FileText className="h-4 w-4 text-emerald-300" />
               </div>
-              <p className="mt-1 text-sm text-slate-300">
-                Define the request, the owner, and the date it is needed.
-              </p>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-lg font-semibold text-slate-100">
+                    Request Details
+                  </h3>
+                  {renderStepState(requestDetailsComplete)}
+                </div>
+                <p className="mt-1 text-sm text-slate-300">
+                  Add what is needed, who needs it, and why the business needs it.
+                </p>
+              </div>
             </div>
+            {renderSaveDraftButton()}
           </div>
 
           <div className="mt-6 grid gap-5 md:grid-cols-2">
@@ -602,38 +621,6 @@ function CreateRequestPage() {
               {...register("requiredByDate")}
               className="md:col-span-2"
             />
-          </div>
-
-          {activeDepartmentsError ? (
-            <div className="mt-5 rounded-[1.1rem] border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-              {activeDepartmentsError}
-            </div>
-          ) : null}
-        </Card>
-      );
-    }
-
-    if (currentStep === 1) {
-      return (
-        <Card>
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-2.5">
-              <ReceiptText className="h-4 w-4 text-emerald-300" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-lg font-semibold text-slate-100">
-                  Business Details
-                </h3>
-                {renderStepState(detailsComplete)}
-              </div>
-              <p className="mt-1 text-sm text-slate-300">
-                Explain what is needed and why the business needs it now.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-5">
             <TextareaField
               label="Request description"
               placeholder="Describe what needs to be procured."
@@ -652,14 +639,20 @@ function CreateRequestPage() {
               {...register("justification")}
             />
           </div>
+
+          {activeDepartmentsError ? (
+            <div className="mt-5 rounded-[1.1rem] border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+              {activeDepartmentsError}
+            </div>
+          ) : null}
         </Card>
       );
     }
 
-    if (currentStep === 2) {
+    if (currentStep === 1) {
       return (
         <Card>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-2.5">
                 <ClipboardList className="h-4 w-4 text-emerald-300" />
@@ -681,15 +674,18 @@ function CreateRequestPage() {
               </div>
             </div>
 
-            <Button
-              type="button"
-              variant="secondary"
-              className="gap-2 rounded-2xl"
-              onClick={handleAddLineItem}
-            >
-              <CirclePlus className="h-4 w-4" />
-              Add Line Item
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                className="gap-2 rounded-2xl"
+                onClick={handleAddLineItem}
+              >
+                <CirclePlus className="h-4 w-4" />
+                Add Line Item
+              </Button>
+              {renderSaveDraftButton()}
+            </div>
           </div>
 
           <div className="mt-6 space-y-5">
@@ -814,23 +810,140 @@ function CreateRequestPage() {
       );
     }
 
+    if (currentStep === 2) {
+      return (
+        <Card>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-2.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-lg font-semibold text-slate-100">
+                    Summary
+                  </h3>
+                  {renderStepState(readyToSubmit)}
+                </div>
+                <p className="mt-1 text-sm text-slate-300">
+                  Review the request details before moving to the final submit step.
+                </p>
+              </div>
+            </div>
+            {renderSaveDraftButton()}
+          </div>
+
+          <div className="mt-6 grid gap-6">
+            <div className="rounded-[1.3rem] border border-white/8 bg-white/[0.03] px-5 py-5">
+              <h4 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Request Summary
+              </h4>
+              <div className="mt-4">
+                <ReviewRow label="Title" value={watchedTitle || "Not set"} />
+                <ReviewRow
+                  label="Department"
+                  value={selectedDepartment?.name || "Not set"}
+                />
+                <ReviewRow
+                  label="Priority"
+                  value={formatPriority(watchedPriority)}
+                />
+                <ReviewRow
+                  label="Required By"
+                  value={watchedRequiredByDate || "Not set"}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-[1.3rem] border border-white/8 bg-white/[0.03] px-5 py-5">
+              <h4 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Description
+              </h4>
+              <p className="mt-3 text-sm leading-7 text-slate-300">
+                {watchedDescription?.trim() || "No description provided."}
+              </p>
+            </div>
+
+            <div className="rounded-[1.3rem] border border-white/8 bg-white/[0.03] px-5 py-5">
+              <h4 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Justification
+              </h4>
+              <p className="mt-3 text-sm leading-7 text-slate-300">
+                {watchedJustification?.trim() || "No justification provided."}
+              </p>
+            </div>
+
+            <div className="overflow-hidden rounded-[1.3rem] border border-white/8 bg-white/[0.03]">
+              <div className="border-b border-white/8 px-5 py-4">
+                <h4 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  Line Items
+                </h4>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-white/8 text-sm">
+                  <thead className="bg-white/[0.03] text-left text-xs uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Item</th>
+                      <th className="px-4 py-3 font-semibold">Qty</th>
+                      <th className="px-4 py-3 font-semibold">Unit Cost</th>
+                      <th className="px-4 py-3 font-semibold">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/8">
+                    {(lineItems || []).map((item, index) => (
+                      <tr key={`${item?.itemDescription}-${index}`} className="align-top">
+                        <td className="px-4 py-4">
+                          <p className="font-medium text-slate-100">
+                            {item?.itemDescription || `Item ${index + 1}`}
+                          </p>
+                          {item?.notes ? (
+                            <p className="mt-2 text-xs leading-6 text-slate-400">
+                              {item.notes}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-4 text-slate-300">
+                          {item?.quantity || 0}
+                        </td>
+                        <td className="px-4 py-4 text-slate-300">
+                          {formatCurrency(item?.unitCost)}
+                        </td>
+                        <td className="px-4 py-4 font-medium text-slate-100">
+                          {formatCurrency(
+                            Number(item?.quantity || 0) * Number(item?.unitCost || 0)
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
     return (
       <Card>
-        <div className="flex items-center gap-3">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-2.5">
-            <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-lg font-semibold text-slate-100">
-                Review & Submit
-              </h3>
-              {renderStepState(readyToSubmit)}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-2.5">
+              <CheckCircle2 className="h-4 w-4 text-emerald-300" />
             </div>
-            <p className="mt-1 text-sm text-slate-300">
-              Review the request before moving to the final submit step.
-            </p>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-semibold text-slate-100">
+                  Review & Submit
+                </h3>
+                {renderStepState(readyToSubmit)}
+              </div>
+              <p className="mt-1 text-sm text-slate-300">
+                Review the request before moving to the final submit step.
+              </p>
+            </div>
           </div>
+          {renderSaveDraftButton()}
         </div>
 
         <div className="mt-6 grid gap-6">
@@ -965,12 +1078,8 @@ function CreateRequestPage() {
               <p className="text-sm font-medium text-slate-100">Final check</p>
               <div className="mt-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-slate-300">Request Basics</span>
-                  {renderStepState(basicsComplete)}
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-slate-300">Business Details</span>
-                  {renderStepState(detailsComplete)}
+                  <span className="text-sm text-slate-300">Request Details</span>
+                  {renderStepState(requestDetailsComplete)}
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm text-slate-300">Line Items</span>
@@ -1024,7 +1133,7 @@ function CreateRequestPage() {
 
           <Card>
             <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     Step {currentStep + 1} of {stepDefinitions.length}
@@ -1032,41 +1141,6 @@ function CreateRequestPage() {
                   <h3 className="mt-1 text-base font-semibold text-slate-100">
                     {stepDefinitions[currentStep].title}
                   </h3>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button
-                    type="button"
-                    className="rounded-2xl"
-                    disabled={isBusy}
-                    onClick={handleSubmit(handleSaveDraft)}
-                  >
-                    {createRequestStatus === "loading" &&
-                    submitRequestStatus !== "loading"
-                      ? "Saving draft..."
-                      : updateRequestStatus === "loading" &&
-                          submitRequestStatus !== "loading"
-                        ? "Saving changes..."
-                        : isEditMode
-                          ? "Save Changes"
-                          : "Save Draft"}
-                  </Button>
-
-                  {currentStep === stepDefinitions.length - 1 ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="rounded-2xl"
-                      disabled={isBusy || !readyToSubmit}
-                      onClick={handleSubmit(handleSaveAndSubmit)}
-                    >
-                      {submitRequestStatus === "loading"
-                        ? "Submitting request..."
-                        : isEditMode
-                          ? "Save & Resubmit"
-                          : "Save & Submit"}
-                    </Button>
-                  ) : null}
                 </div>
               </div>
 
@@ -1092,9 +1166,19 @@ function CreateRequestPage() {
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 ) : (
-                  <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
-                    Final step
-                  </span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="rounded-2xl"
+                    disabled={isBusy || !readyToSubmit}
+                    onClick={handleSubmit(handleSaveAndSubmit)}
+                  >
+                    {submitRequestStatus === "loading"
+                      ? "Submitting request..."
+                      : isEditMode
+                        ? "Save & Resubmit"
+                        : "Save & Submit"}
+                  </Button>
                 )}
               </div>
             </div>
