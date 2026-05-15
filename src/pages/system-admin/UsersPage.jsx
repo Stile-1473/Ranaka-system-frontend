@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useCurrentUser } from "../../hooks/useCurrentUser";
 import {
   Plus,
   RefreshCcw,
@@ -38,6 +39,7 @@ function UsersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [formValues, setFormValues] = useState(createEmptyForm());
+  const currentUser = useCurrentUser();
 
   const usersPage = useUserQueryStore((state) => state.usersPage);
   const usersPageStatus = useUserQueryStore((state) => state.usersPageStatus);
@@ -165,6 +167,11 @@ function UsersPage() {
   };
 
   const handleToggleActive = async (user) => {
+    if (user.isActive && currentUser?.id === user.id) {
+      toast.error("You cannot deactivate your own account.");
+      return;
+    }
+
     try {
       if (user.isActive) {
         await deactivateSystemUser(user.id);
@@ -371,6 +378,9 @@ function UsersPage() {
                               <Badge variant={user.isActive ? "success" : "neutral"}>
                                 {user.isActive ? "Active" : "Inactive"}
                               </Badge>
+                              {currentUser?.id === user.id ? (
+                                <p className="mt-2 text-xs font-medium text-amber-300">Current account</p>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -387,10 +397,11 @@ function UsersPage() {
                             <Button
                               variant="secondary"
                               className="gap-2 px-3 py-2 text-rose-300 hover:text-rose-200"
+                              disabled={currentUser?.id === user.id}
                               onClick={() => handleToggleActive(user)}
                             >
                               <UserX className="h-4 w-4" />
-                              Deactivate
+                              {currentUser?.id === user.id ? "Current account" : "Deactivate"}
                             </Button>
                           ) : (
                             <Button
@@ -442,10 +453,11 @@ function UsersPage() {
                             <Button
                               variant="secondary"
                               className="gap-2 px-3 py-2 text-rose-300 hover:text-rose-200"
+                              disabled={currentUser?.id === user.id}
                               onClick={() => handleToggleActive(user)}
                             >
                               <UserX className="h-4 w-4" />
-                              Deactivate
+                              {currentUser?.id === user.id ? "Current account" : "Deactivate"}
                             </Button>
                           ) : (
                             <Button

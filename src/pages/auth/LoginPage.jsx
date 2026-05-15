@@ -83,13 +83,39 @@ function LoginPage() {
             </p>
           </div>
 
-          <form className="mt-8 space-y-5" onSubmit={handleSubmit(onSubmit)}>
+          <form
+            className="mt-8 space-y-5"
+            onSubmit={handleSubmit(onSubmit)}
+            autoComplete="off"
+          >
+            <input
+              type="text"
+              name="fake-username"
+              autoComplete="username"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="hidden"
+            />
+            <input
+              type="password"
+              name="fake-password"
+              autoComplete="current-password"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="hidden"
+            />
             {/* Form fields use react-hook-form registration directly */}
             <InputField
               label="Email"
               type="email"
               placeholder="requester1@ranaka.org"
               error={errors.email?.message}
+              autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
               {...register("email")}
             />
             <label className="flex flex-col gap-2">
@@ -99,6 +125,9 @@ function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   placeholder="Ranaka@123"
                   className="w-full rounded-[1.05rem] border border-white/10 bg-white/6 px-4 py-3 pr-12 text-sm text-slate-50 shadow-[0_16px_40px_-30px_rgba(2,6,23,1)] outline-none backdrop-blur-xl transition placeholder:text-slate-500 focus:border-emerald-400/35 focus:bg-white/8 focus:ring-4 focus:ring-emerald-500/10"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   {...register("password")}
                 />
                 <button
